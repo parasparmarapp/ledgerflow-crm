@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment / secrets (keep the examples)
+.env
+.env.*
+!.env.example
+
+# Local databases & backups
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+.backups/
+*.sql
+!backend/prisma/migrations/**/*.sql
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Local credentials (never commit)
+backend/verification-identities.json
+backend/artifacts/

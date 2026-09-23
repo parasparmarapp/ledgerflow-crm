@@ -1,0 +1,580 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Conventions
+// - Money: Decimal(14,2). Quantities: Decimal(14,3). Rates (%): Decimal(7,3).
+// - Status / type columns are strings validated in the service layer (the web client
+//   already speaks these lowercase values, e.g. "partially_paid", "e-payment").
+// - Financial documents are never hard-deleted after leaving draft; they are voided.
+
+// ---------------------------------------------------------------------------
+// Identity, settings & audit
+// ---------------------------------------------------------------------------
+
+model User {
+  id           Int       @id @default(autoincrement())
+  companyId    Int       @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  email        String
+  name         String
+  passwordHash String
+  role         String // "admin" | "staff"
+  isActive     Boolean   @default(true)
+  sessionVersion Int     @default(0)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  stockMovements StockMovement[]
+  auditLogs      AuditLog[]
+  passwordResetToken PasswordResetToken?
+
+  @@unique([companyId, email])
+  @@index([companyId, isActive])
+  @@index([companyId])
+}
+
+/// Tenant boundary for all company-owned CRM records.
+model Company {
+  id        Int      @id @default(autoincrement())
+  slug      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users              User[]
+  passwordResetTokens PasswordResetToken[]
+  settings            CompanySettings?
+  sequences           NumberSequence[]
+  taxRates            TaxRate[]
+  auditLogs           AuditLog[]
+  clients             Client[]
+  clientContacts      ClientContact[]
+  products            ProductService[]
+  inventoryItems      InventoryItem[]
+  stockMovements      StockMovement[]
+  invoices            Invoice[]
+  invoiceLineItems    InvoiceLineItem[]
+  invoiceRevisions    InvoiceRevision[]
+  recurringInvoices   RecurringInvoice[]
+  payments            Payment[]
+  expenses            Expense[]
+  messageTemplates    MessageTemplate[]
+  reminders           Reminder[]
+  notificationLogs    NotificationLog[]
+  alerts              Alert[]
+}
+
+/// One active, short-lived reset link per account. Only the SHA-256 token digest is stored.
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, userId])
+  @@index([expiresAt])
+}
+
+/// Singleton row (id = 1) holding company profile, document defaults and notification toggles.
+model CompanySettings {
+  id                      Int      @id @default(autoincrement())
+  companyId               Int      @unique @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  companyName             String   @default("LedgerFlow CRM")
+  logoUrl                 String?
+  email                   String?
+  phone                   String?
+  address                 String?
+  taxId                   String?
+  currency                String   @default("GHS")
+  timezone                String   @default("Africa/Accra")
+  invoicePrefix           String   @default("INV-")
+  receiptPrefix           String   @default("RCT-")
+  quotationPrefix         String   @default("QT-")
+  defaultPaymentTermsDays Int      @default(14)
+  defaultNotes            String?
+  defaultTerms            String?
+  allowNegativeStock      Boolean  @default(false)
+  notifyInvoiceSentEmail  Boolean  @default(true)
+  notifyInvoiceSentSms    Boolean  @default(true)
+  notifyPaymentEmail      Boolean  @default(true)
+  notifyPaymentSms        Boolean  @default(true)
+  notifyRemindersEmail    Boolean  @default(true)
+  notifyRemindersSms      Boolean  @default(true)
+  updatedAt               DateTime @updatedAt
+  @@index([companyId])
+}
+
+/// Gap-free document numbering. key = "<doc>:<year>", e.g. "invoice:2026".
+model NumberSequence {
+  companyId Int    @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  key       String
+  lastValue Int    @default(0)
+
+  @@id([companyId, key])
+  @@index([companyId])
+}
+
+model TaxRate {
+  id         Int      @id @default(autoincrement())
+  companyId  Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name       String
+  rate       Decimal  @db.Decimal(7, 3)
+  /// Optional breakdown, e.g. [{"name":"CGST","rate":9},{"name":"SGST","rate":9}]
+  components Json?
+  isDefault  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  products ProductService[]
+  @@index([companyId])
+}
+
+/// Append-only record of important financial, inventory and admin changes.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  companyId  Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  userId     Int?
+  action     String // e.g. "invoice.void", "payment.create", "stock.adjust"
+  entityType String
+  entityId   Int?
+  summary    String?
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Clients
+// ---------------------------------------------------------------------------
+
+model Client {
+  id              Int      @id @default(autoincrement())
+  companyId       Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name            String
+  companyName     String?
+  email           String?
+  phone           String?
+  billingAddress  String?
+  shippingAddress String?
+  taxIdentifier   String?
+  notes           String?
+  segment         String?
+  isActive        Boolean  @default(true) // false = archived
+  smsOptOut       Boolean  @default(false)
+  emailOptOut     Boolean  @default(false)
+  createdById     Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contacts          ClientContact[]
+  invoices          Invoice[]
+  payments          Payment[]
+  recurringInvoices RecurringInvoice[]
+  notifications     NotificationLog[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([name])
+  @@index([companyId])
+}
+
+model ClientContact {
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @default(1)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId    Int
+  name        String
+  email       String?
+  phone       String?
+  designation String?
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalog & inventory
+// ---------------------------------------------------------------------------
+
+model ProductService {
+  id             Int      @id @default(autoincrement())
+  companyId      Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  name           String
+  description    String?
+  type           String // "product" | "service"
+  group          String   @default("Commodities")
+  sku            String?
+  unit           String   @default("pcs")
+  unitPrice      Decimal  @db.Decimal(14, 2)
+  costPrice      Decimal? @db.Decimal(14, 2)
+  taxRate        Decimal  @default(0) @db.Decimal(7, 3)
+  taxRateId      Int?
+  trackInventory Boolean  @default(false)
+  imageUrl       String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  taxRateRef    TaxRate?          @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem?
+  lineItems     InvoiceLineItem[]
+
+  @@unique([companyId, sku])
+  @@index([companyId])
+}
+
+model InventoryItem {
+  id               Int      @id @default(autoincrement())
+  companyId        Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  productServiceId Int      @unique
+  quantityOnHand   Decimal  @default(0) @db.Decimal(14, 3)
+  reorderThreshold Decimal  @default(5) @db.Decimal(14, 3)
+  unitCost         Decimal  @default(0) @db.Decimal(14, 2)
+  location         String?
+  isArchived       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  product   ProductService  @relation(fields: [productServiceId], references: [id], onDelete: Restrict)
+  movements StockMovement[]
+  alerts    Alert[]
+  @@index([companyId])
+}
+
+/// Append-only stock ledger. quantityOnHand only changes together with a row here.
+model StockMovement {
+  id               Int      @id @default(autoincrement())
+  companyId        Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  inventoryItemId  Int
+  userId           Int?
+  quantityChange   Decimal  @db.Decimal(14, 3)
+  previousQuantity Decimal? @db.Decimal(14, 3)
+  balanceAfter     Decimal? @db.Decimal(14, 3)
+  reason           String // human readable
+  reasonCode       String? // opening | restock | invoice_issued | invoice_voided | invoice_revised | return | damage | correction | manual_adjustment
+  notes            String?
+  referenceType    String? // "invoice" | "adjustment"
+  referenceId      Int?
+  isOverride       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  item InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  user User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([inventoryItemId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Invoicing
+// ---------------------------------------------------------------------------
+
+model Invoice {
+  id             Int       @id @default(autoincrement())
+  companyId      Int       @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId       Int
+  /// Assigned from NumberSequence when the invoice is issued. Null while draft.
+  invoiceNumber  String?
+  issueDate      DateTime
+  dueDate        DateTime
+  status         String // draft | sent | viewed | partially_paid | paid | overdue | cancelled
+  subtotal       Decimal   @default(0) @db.Decimal(14, 2)
+  discountAmount Decimal   @default(0) @db.Decimal(14, 2)
+  taxAmount      Decimal   @default(0) @db.Decimal(14, 2)
+  totalAmount    Decimal   @default(0) @db.Decimal(14, 2)
+  amountPaid     Decimal   @default(0) @db.Decimal(14, 2)
+  balanceDue     Decimal   @default(0) @db.Decimal(14, 2)
+  notes          String?
+  terms          String?
+  revision       Int       @default(0)
+  /// True while an admin-initiated revision of a paid/part-paid invoice is open.
+  revisionOpen   Boolean   @default(false)
+  publicToken    String    @unique @default(uuid())
+  issuedAt       DateTime?
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  createdById    Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  client        Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  lineItems     InvoiceLineItem[]
+  payments      Payment[]
+  revisions     InvoiceRevision[]
+  reminders     Reminder[]
+  alerts        Alert[]
+  notifications NotificationLog[]
+
+  @@index([status, dueDate])
+  @@index([clientId])
+  @@index([issueDate])
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId])
+}
+
+model InvoiceLineItem {
+  id               Int      @id @default(autoincrement())
+  companyId        Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoiceId        Int
+  productServiceId Int?
+  description      String
+  quantity         Decimal  @db.Decimal(14, 3)
+  unitPrice        Decimal  @db.Decimal(14, 2)
+  discountAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  taxRate          Decimal  @default(0) @db.Decimal(7, 3)
+  taxAmount        Decimal  @default(0) @db.Decimal(14, 2)
+  lineTotal        Decimal  @db.Decimal(14, 2)
+  unitCostSnapshot Decimal? @db.Decimal(14, 2)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  invoice Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product ProductService? @relation(fields: [productServiceId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([companyId])
+}
+
+/// Snapshot of an invoice taken before an issued invoice is edited or revised.
+model InvoiceRevision {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoiceId Int
+  revision  Int
+  reason    String
+  snapshot  Json
+  userId    Int?
+  createdAt DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([companyId])
+}
+
+model RecurringInvoice {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  clientId  Int
+  frequency String // weekly | monthly | quarterly | custom
+  nextRunAt DateTime
+  amount    Decimal  @db.Decimal(14, 2)
+  isActive  Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments & expenses
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id            Int       @id @default(autoincrement())
+  companyId     Int       @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  receiptNumber String?
+  invoiceId     Int
+  clientId      Int
+  amount        Decimal   @db.Decimal(14, 2)
+  paymentDate   DateTime
+  method        String // cash | e-payment | mobile_money | bank_transfer | credit_card | cheque | other
+  reference     String?
+  status        String // completed | pending | reconciled | voided
+  notes         String?
+  reconciledAt  DateTime?
+  voidedAt      DateTime?
+  voidReason    String?
+  receivedById  Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  invoice       Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  client        Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  notifications NotificationLog[]
+
+  @@index([paymentDate])
+  @@index([invoiceId])
+  @@index([clientId])
+  @@unique([companyId, receiptNumber])
+  @@index([companyId])
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  companyId   Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  description String
+  category    String
+  amount      Decimal  @db.Decimal(14, 2)
+  expenseDate DateTime
+  vendor      String?
+  notes       String?
+  createdById Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([expenseDate])
+  @@index([companyId])
+}
+
+// ---------------------------------------------------------------------------
+// Communication
+// ---------------------------------------------------------------------------
+
+/// Reusable email / SMS templates rendered with {{placeholders}}.
+model MessageTemplate {
+  id        Int      @id @default(autoincrement())
+  companyId Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  /// invoice_sent | payment_received | reminder_before_due | reminder_on_due | reminder_overdue | custom
+  key       String
+  channel   String // email | sms
+  name      String
+  subject   String? // email only
+  body      String
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reminders Reminder[]
+
+  @@unique([companyId, key, channel, name])
+  @@index([key, channel])
+  @@index([companyId])
+}
+
+/// Reminder rule. invoiceId = null applies to every open invoice; set it to target one invoice.
+model Reminder {
+  id              Int      @id @default(autoincrement())
+  companyId       Int      @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoiceId       Int?
+  name            String?
+  channel         String // email | sms
+  triggerType     String // before_due | on_due | overdue
+  daysOffset      Int      @default(3)
+  /// For overdue rules: resend every N days after the first reminder (null = send once).
+  repeatEveryDays Int?
+  maxRepeats      Int      @default(3)
+  templateId      Int?
+  isActive        Boolean  @default(true)
+  /// Optional custom body; overrides the template body when set.
+  message         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  invoice       Invoice?          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  template      MessageTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  notifications NotificationLog[]
+  @@index([companyId])
+}
+
+/// Delivery log for every email and SMS attempt.
+model NotificationLog {
+  id                Int       @id @default(autoincrement())
+  companyId         Int       @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  channel           String // email | sms
+  event             String // template key, "manual" or "test"
+  recipient         String
+  subject           String?
+  body              String
+  clientId          Int?
+  invoiceId         Int?
+  paymentId         Int?
+  reminderId        Int?
+  status            String // queued | sent | delivered | failed | simulated | skipped
+  providerMessageId String?
+  error             String?
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime?
+  sentById          Int?
+  deliveredAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  client   Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  reminder Reminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([invoiceId, reminderId, channel])
+  @@index([status, nextAttemptAt])
+  @@index([providerMessageId])
+  @@index([createdAt])
+  @@index([companyId])
+}
+
+/// In-app alerts (low stock, overdue invoices, payment received, failed notifications).
+model Alert {
+  id              Int       @id @default(autoincrement())
+  companyId       Int       @default(1)
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  invoiceId       Int?
+  inventoryItemId Int?
+  channel         String    @default("in-app")
+  alertType       String // low_stock | out_of_stock | invoice_overdue | invoice_sent | payment_received | notification_failed
+  message         String?
+  status          String    @default("unread") // unread | read | resolved
+  sentAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([alertType, inventoryItemId])
+  @@index([companyId])
+}
