@@ -24,13 +24,13 @@ export interface ArkeselSendPayload {
 
 /** Reads SMS configuration from environment variables on every call so .env changes apply without a restart. */
 export const getSmsConfig = () => ({
-  apiKey: process.env.ARKESEL_API_KEY || '',
-  senderId: process.env.ARKESEL_SENDER_ID || 'LedgerFlow',
-  baseUrl: (process.env.ARKESEL_BASE_URL || 'https://sms.arkesel.com/api/v2').replace(/\/+$/, ''),
-  enabled: process.env.SMS_ENABLED !== 'false',
-  sandbox: process.env.SMS_SANDBOX === 'true',
-  defaultCountryCode: (process.env.SMS_DEFAULT_COUNTRY_CODE || '233').replace(/\D/g, ''),
-  callbackUrl: process.env.SMS_CALLBACK_URL || '',
+  apiKey: process.env.LEGERCRM_ARKESEL_API_KEY || '',
+  senderId: process.env.LEGERCRM_ARKESEL_SENDER_ID || 'LedgerFlow',
+  baseUrl: (process.env.LEGERCRM_ARKESEL_BASE_URL || 'https://sms.arkesel.com/api/v2').replace(/\/+$/, ''),
+  enabled: process.env.LEGERCRM_SMS_ENABLED !== 'false',
+  sandbox: process.env.LEGERCRM_SMS_SANDBOX === 'true',
+  defaultCountryCode: (process.env.LEGERCRM_SMS_DEFAULT_COUNTRY_CODE || '233').replace(/\D/g, ''),
+  callbackUrl: process.env.LEGERCRM_SMS_CALLBACK_URL || '',
 });
 
 /**
@@ -117,7 +117,7 @@ class SmsService {
     if (!config.enabled) return { success: false, status: 'skipped', messageId: null, simulated: false, recipient: recipient || String(to || ''), error: 'SMS disabled (SMS_ENABLED=false)' };
     if (!recipient) return { success: false, status: 'skipped', messageId: null, simulated: false, recipient: String(to || ''), error: 'Missing or invalid phone number' };
 
-    if (this.isConfigured() && process.env.NODE_ENV !== 'test') {
+    if (this.isConfigured() && process.env.LEGERCRM_NODE_ENV !== 'test') {
       try {
         const { messageId } = await arkeselSend(config, {
           sender: config.senderId,

@@ -213,7 +213,7 @@ notificationsRouter.get(
   ah(async (req, res) => {
     const configured = emailService.isSmtpConfigured();
     const connection = await emailService.verifyConnection();
-    res.json({ configured, connected: connection.connected, message: connection.message, host: process.env.SMTP_HOST || 'smtp.gmail.com', port: Number(process.env.SMTP_PORT) || 587, fromAddress: process.env.EMAIL_FROM_ADDRESS || process.env.SMTP_USER || '' });
+    res.json({ configured, connected: connection.connected, message: connection.message, host: process.env.LEGERCRM_SMTP_HOST || 'smtp.gmail.com', port: Number(process.env.LEGERCRM_SMTP_PORT) || 587, fromAddress: process.env.LEGERCRM_EMAIL_FROM_ADDRESS || process.env.LEGERCRM_SMTP_USER || '' });
   }),
 );
 notificationsRouter.post(
@@ -222,7 +222,7 @@ notificationsRouter.post(
   ah(async (req, res) => {
     const schema = z.object({ to: z.string().email().optional() });
     const body = parseBody(schema, req);
-    const to = body.to || process.env.EMAIL_FROM_ADDRESS || 'test@ledgerflow.local';
+    const to = body.to || process.env.LEGERCRM_EMAIL_FROM_ADDRESS || 'test@ledgerflow.local';
     const result = await notificationService.sendTest('email', to);
     res.json({ success: result.status !== 'failed' && result.status !== 'skipped', message: `Test email dispatched to ${to}`, result });
   }),
@@ -285,7 +285,7 @@ notificationsRouter.get(
 // Arkesel sends sms_id/status as query params and the HTTP method isn't documented, so accept both.
 export const arkeselWebhookRouter = Router();
 const handleArkeselDelivery = ah(async (req, res) => {
-  const secret = process.env.SMS_WEBHOOK_SECRET;
+  const secret = process.env.LEGERCRM_SMS_WEBHOOK_SECRET;
   if (secret && req.query.secret !== secret) return res.status(401).json({ error: 'Unauthorized', code: 'AUTH_REQUIRED' });
   const q = req.query as Record<string, string | undefined>;
   const b = req.body || {};

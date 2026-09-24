@@ -27,7 +27,7 @@ export function verifyPassword(plain: string, stored: unknown): boolean {
 }
 
 function secret(): string {
-  const value = process.env.JWT_SECRET;
+  const value = process.env.LEGERCRM_JWT_SECRET;
   if (!value) throw new Error('JWT_SECRET is required for authentication');
   return value;
 }
@@ -39,7 +39,7 @@ export function issueToken(user: { id: number | string; role: string; companyId:
 }
 
 export function verifyToken(header: string | undefined): Principal | null {
-  if (!process.env.JWT_SECRET || !header || !header.startsWith('Bearer ')) return null;
+  if (!process.env.LEGERCRM_JWT_SECRET || !header || !header.startsWith('Bearer ')) return null;
   const [payload, signature] = header.slice(7).trim().split('.');
   if (!payload || !signature) return null;
   const expected = createHmac('sha256', secret()).update(payload).digest('base64url');

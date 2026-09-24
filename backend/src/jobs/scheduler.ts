@@ -56,7 +56,7 @@ let started = false;
 
 /** Registers all cron jobs. Call once at boot; a no-op outside NODE_ENV=production/development. */
 export function startScheduler() {
-  if (started || process.env.NODE_ENV === 'test') return;
+  if (started || process.env.LEGERCRM_NODE_ENV === 'test') return;
   started = true;
 
   // Mark overdue invoices daily just after midnight.

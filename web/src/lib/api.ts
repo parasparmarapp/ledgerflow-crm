@@ -1,6 +1,6 @@
 // Typed fetch API client for Web
-const RAW_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL)
-  ? import.meta.env.VITE_API_URL
+const RAW_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.LEGERCRM_VITE_API_URL)
+  ? import.meta.env.LEGERCRM_VITE_API_URL
   : '/api/v1';
 const BASE = RAW_BASE.replace(/\/+$/, '');
 

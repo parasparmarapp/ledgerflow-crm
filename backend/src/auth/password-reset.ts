@@ -18,9 +18,9 @@ function escapeHtml(value: string): string {
 }
 
 function resetUrl(companySlug: string, token: string): string {
-  const base = process.env.PUBLIC_APP_URL || 'http://localhost:5173';
+  const base = process.env.LEGERCRM_PUBLIC_APP_URL || 'http://localhost:5173';
   const url = new URL('/reset-password', base);
-  if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
+  if (url.protocol !== 'https:' && !(process.env.LEGERCRM_NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
     throw new Error('PUBLIC_APP_URL must be an HTTPS URL for password reset.');
   }
   url.searchParams.set('company', companySlug);
@@ -57,7 +57,7 @@ export async function requestPasswordReset(companySlug: string, email: string): 
     }
     const safeName = escapeHtml(settings.companyName);
     const safeLink = escapeHtml(link);
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env.LEGERCRM_NODE_ENV === 'production';
     const result = await emailService.sendEmail({
       to: user.email,
       subject: `Reset your ${settings.companyName} password`,
@@ -95,7 +95,7 @@ export async function resetPassword(companySlug: string, token: string, newPassw
     if (changedUserId === null) return false;
     invalidateUserCache(changedUserId, company.id);
     const settings = await getSettings();
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env.LEGERCRM_NODE_ENV === 'production';
     const result = await emailService.sendEmail({
       to: (await prisma.user.findUnique({ where: { id: changedUserId }, select: { email: true } }))!.email,
       subject: `Your ${settings.companyName} password was changed`,

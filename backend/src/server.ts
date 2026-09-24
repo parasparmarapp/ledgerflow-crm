@@ -91,7 +91,7 @@ app.use('/api', (req, res) => {
 
 app.use(errorHandler);
 
-const PORT = Number(process.env.PORT || 5100);
+const PORT = Number(process.env.LEGERCRM_PORT || 5100);
 
 function listenOnAvailablePort(port: number, attempts = 20): void {
   const server = app.listen(port);
@@ -115,7 +115,7 @@ function listenOnAvailablePort(port: number, attempts = 20): void {
   });
 }
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.LEGERCRM_NODE_ENV !== 'test') {
   Promise.all([
     prisma.company.upsert({ where: { slug: 'brand-it' }, create: { slug: 'brand-it', name: 'Brand It Company' }, update: { name: 'Brand It Company', isActive: true } }),
     prisma.company.upsert({ where: { slug: 'stoic' }, create: { slug: 'stoic', name: 'Stoic Company' }, update: { name: 'Stoic Company', isActive: true } }),
