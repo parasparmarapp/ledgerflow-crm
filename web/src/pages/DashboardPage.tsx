@@ -20,6 +20,7 @@ import {
   Shield,
   Layers,
 } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 interface AgingBucket {
   count: number;
@@ -94,25 +95,32 @@ function formatDate(val?: string) {
   });
 }
 
+function toDateStr(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState<'all' | '30d' | 'this_month'>('all');
+  const [timeRange, setTimeRange] = useState<'all' | '30d' | 'this_month' | 'custom'>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const fetchDashboard = async () => {
     setLoading(true);
     setError(null);
     try {
       const params: Record<string, string> = {};
-      const now = new Date();
-      if (timeRange === '30d') {
-        const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        params.from = from.toISOString();
-      } else if (timeRange === 'this_month') {
-        const from = new Date(now.getFullYear(), now.getMonth(), 1);
-        params.from = from.toISOString();
+      if (startDate) {
+        params.from = startDate;
+      }
+      if (endDate) {
+        params.to = endDate;
       }
 
       const res = await api.get<DashboardSummary>('/dashboard/summary', { params });
@@ -124,9 +132,36 @@ export default function DashboardPage() {
     }
   };
 
+  const handlePresetSelect = (id: 'all' | 'this_month' | '30d') => {
+    setTimeRange(id);
+    const now = new Date();
+    if (id === 'all') {
+      setStartDate('');
+      setEndDate('');
+    } else if (id === 'this_month') {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStartDate(toDateStr(first));
+      setEndDate(toDateStr(now));
+    } else if (id === '30d') {
+      const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      setStartDate(toDateStr(d30));
+      setEndDate(toDateStr(now));
+    }
+  };
+
+  const handleCustomDateChange = (start: string, end: string) => {
+    setStartDate(start);
+    setEndDate(end);
+    if (start || end) {
+      setTimeRange('custom');
+    } else {
+      setTimeRange('all');
+    }
+  };
+
   useEffect(() => {
     fetchDashboard();
-  }, [timeRange]);
+  }, [startDate, endDate, timeRange]);
 
   if (loading && !data) {
     return (
@@ -197,8 +232,8 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* <div className="flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
               {(
                 [
                   { id: 'all', label: 'All Time' },
@@ -209,7 +244,7 @@ export default function DashboardPage() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setTimeRange(t.id)}
+                  onClick={() => handlePresetSelect(t.id)}
                   className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                     timeRange === t.id
                       ? 'bg-slate-900 text-white shadow-sm'
@@ -219,13 +254,21 @@ export default function DashboardPage() {
                   {t.label}
                 </button>
               ))}
-            </div>
+            </div> */}
+
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onChange={handleCustomDateChange}
+              align="right"
+              placeholder="Select Date Range"
+            />
 
             <button
               type="button"
               onClick={fetchDashboard}
               title="Refresh Dashboard"
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900 shadow-sm"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900 shadow-sm cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -274,7 +317,7 @@ export default function DashboardPage() {
           </Link>
 
           <Link
-            to="/inventory"
+            to="/inventory-list"
             className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-amber-300 hover:shadow-md group"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition">
@@ -525,7 +568,7 @@ export default function DashboardPage() {
                 <h2 className="text-base font-bold text-slate-900">Low Stock Alert</h2>
               </div>
               <Link
-                to="/inventory"
+                to="/inventory-list"
                 className="text-xs font-semibold text-rose-600 hover:text-rose-800"
               >
                 View all &rarr;

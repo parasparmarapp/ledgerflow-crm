@@ -390,6 +390,8 @@ export default function App() {
                 }
               />
               <Route path={ROUTES.INVENTORY_LIST} element={<InventoryListPage />} />
+              <Route path="/inventory" element={<InventoryListPage />} />
+              <Route path="/inventory-stock" element={<InventoryListPage />} />
               <Route path={ROUTES.CREATE_ITEM} element={<CreateItemPage />} />
               <Route path={ROUTES.EDIT_INVENTORY_ITEM} element={<EditInventoryItemPage />} />
               <Route path={ROUTES.INVENTORY_ITEM_DETAILS} element={<InventoryItemDetailsPage />} />
@@ -451,7 +453,8 @@ export default function App() {
               />
               <Route path="/payments" element={<PaymentsListPage />} />
               <Route path={ROUTES.PAYMENTS_LIST} element={<PaymentsListPage />} />
-              <Route path={ROUTES.RECORD_PAYMENT} element={<RecordPaymentPage />} />
+              <Route path="/record-payment" element={<Navigate to="/payments?action=record" replace />} />
+              <Route path={ROUTES.RECORD_PAYMENT} element={<Navigate to="/payments?action=record" replace />} />
               <Route path={ROUTES.PAYMENT_DETAILS} element={<PaymentDetailsPage />} />
               <Route
                 path={ROUTES.PAYMENT_RECONCILIATION}

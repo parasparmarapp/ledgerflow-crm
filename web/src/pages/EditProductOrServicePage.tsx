@@ -6,17 +6,19 @@ import { ROUTES } from '../routes';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Select } from '../components';
 import { compressImageFile } from '../lib/imageCompressor';
-import { 
+import { api } from '../lib/api';
+import {
   ArrowLeft, 
-  CheckCircle2, 
-  ChevronRight, 
-  DollarSign, 
-  Edit, 
-  Eye, 
-  RefreshCw, 
-  Save, 
-  Search, 
-  X, 
+  CheckCircle2,
+  ChevronRight,
+  DollarSign,
+  Edit,
+  Eye,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  X,
   XCircle, 
   Package as PackageIcon,
   Image as ImageIcon,
@@ -35,7 +37,7 @@ type ProductForm = {
   name: string;
   description: string;
   type: string;
-  group: 'Commodities' | 'CCTV' | 'Folding Partition';
+  group: string;
   sku: string;
   imageUrl: string;
   unitPrice: number;
@@ -49,7 +51,7 @@ function getInitialForm(item?: ProductService): ProductForm {
     name: item?.name || '',
     description: item?.description || '',
     type: item?.type || 'Product',
-    group: (item?.group as any) || 'Commodities',
+    group: item?.group || 'Commodities',
     sku: item?.sku || '',
     imageUrl: item?.imageUrl || '',
     unitPrice: Number(item?.unitPrice) || 0,
@@ -92,11 +94,20 @@ export default function EditProductOrServicePage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<ProductForm>(getInitialForm());
   const [search, setSearch] = useState('');
+  const [isCustomGroup, setIsCustomGroup] = useState(false);
+  const [customGroupInput, setCustomGroupInput] = useState('');
+  const [taxRates, setTaxRates] = useState<{ id: number; name: string; rate: number; isDefault?: boolean }[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [fieldError, setFieldError] = useState('');
   const [toast, setToast] = useState<Toast>(null);
+
+  const allGroups = useMemo(() => {
+    const defaultGroups = ['Commodities', 'CCTV', 'Folding Partition'];
+    const fromProducts = products.map((p) => p.group).filter((g): g is string => Boolean(g));
+    return Array.from(new Set([...defaultGroups, ...fromProducts]));
+  }, [products]);
 
   const selectedItem = useMemo(
     () => products.find((item) => item.id === selectedId),
@@ -116,22 +127,29 @@ export default function EditProductOrServicePage() {
   }, [products, search]);
 
   useEffect(() => {
-    const queryId = Number(searchParams.get('id'));
-    if (queryId && products.some((item) => item.id === queryId)) {
-      setSelectedId(queryId);
-    }
-  }, [searchParams, products]);
+    api.get<{ id: number; name: string; rate: number; isDefault?: boolean }[]>('/settings/tax-rates')
+      .then((res) => { if (Array.isArray(res)) setTaxRates(res); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
-    if (selectedId !== null) {
-      const current = products.find((item) => item.id === selectedId);
-      if (current) setForm(getInitialForm(current));
-    } else if (products.length > 0) {
-      const first = products[0];
-      setSelectedId(first.id);
-      setForm(getInitialForm(first));
+    if (products.length === 0) return;
+
+    const rawId = searchParams.get('id');
+    const queryId = rawId ? Number(rawId) : null;
+    let target = queryId ? products.find((p) => p.id === queryId) : undefined;
+    if (!target) {
+      target = (selectedId ? products.find((p) => p.id === selectedId) : null) || products[0];
     }
-  }, [products, selectedId]);
+
+    if (target && target.id !== selectedId) {
+      setSelectedId(target.id);
+      setForm(getInitialForm(target));
+      const isCustom = Boolean(target.group && !['Commodities', 'CCTV', 'Folding Partition'].includes(target.group));
+      setIsCustomGroup(isCustom);
+      setCustomGroupInput(isCustom ? (target.group || '') : '');
+    }
+  }, [searchParams, products]);
 
   const showToast = (message: string, type: ToastType = 'success') => {
     setToast({ message, type });
@@ -142,6 +160,10 @@ export default function EditProductOrServicePage() {
     setSelectedId(item.id);
     setForm(getInitialForm(item));
     setFieldError('');
+    const isCustom = Boolean(item.group && !['Commodities', 'CCTV', 'Folding Partition'].includes(item.group));
+    setIsCustomGroup(isCustom);
+    setCustomGroupInput(isCustom ? (item.group || '') : '');
+    navigate(`/edit-product-or-service?id=${item.id}`, { replace: true });
   };
 
   const updateField = <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => {
@@ -201,13 +223,15 @@ export default function EditProductOrServicePage() {
   const confirmSave = async () => {
     if (!selectedItem) return;
 
+    const finalGroup = (isCustomGroup ? customGroupInput.trim() : form.group) || 'General';
+
     setIsSaving(true);
     try {
       await update(selectedItem.id, {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
         type: form.type,
-        group: form.group,
+        group: finalGroup,
         sku: form.sku.trim() || undefined,
         imageUrl: form.imageUrl.trim() || null,
         unitPrice: Number(form.unitPrice) || 0,
@@ -232,11 +256,11 @@ export default function EditProductOrServicePage() {
           <div>
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate('/products-services-list')}
               className="mb-4 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-900"
             >
               <ArrowLeft size={17} />
-              Back
+              Back to Products &amp; Services
             </button>
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-rose-50 p-3 text-rose-600">
@@ -319,8 +343,10 @@ export default function EditProductOrServicePage() {
                       type="button"
                       key={item.id}
                       onClick={() => handleSelect(item)}
-                      className={`mb-1 flex min-h-[72px] w-full items-center justify-between rounded-xl p-3 text-left transition ${
-                        active ? 'bg-rose-50 ring-1 ring-rose-200' : 'hover:bg-slate-50'
+                      className={`mb-2 flex min-h-[72px] w-full items-center justify-between rounded-xl p-3 text-left transition border cursor-pointer ${
+                        active
+                          ? 'bg-rose-50/90 border-rose-300 ring-1 ring-rose-300 border-l-4 border-l-rose-600 shadow-xs'
+                          : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -402,22 +428,58 @@ export default function EditProductOrServicePage() {
                 <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                   <div className="md:col-span-3">
                     <FieldLabel required>Business Line / Group</FieldLabel>
-                    <div className="grid grid-cols-3 gap-3">
-                      {(['Commodities', 'CCTV', 'Folding Partition'] as const).map((grp) => (
-                        <button
-                          key={grp}
-                          type="button"
-                          onClick={() => updateField('group', grp)}
-                          className={`flex items-center justify-center rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:text-sm ${
-                            form.group === grp
-                              ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-sm'
-                              : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          {grp}
-                        </button>
-                      ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      {allGroups.map((grp) => {
+                        const isSelected = !isCustomGroup && form.group === grp;
+                        return (
+                          <button
+                            key={grp}
+                            type="button"
+                            onClick={() => {
+                              setIsCustomGroup(false);
+                              updateField('group', grp);
+                            }}
+                            className={`flex items-center justify-center rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:text-sm cursor-pointer ${
+                              isSelected
+                                ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-xs'
+                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            {grp}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCustomGroup(true);
+                        }}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-bold transition sm:text-sm cursor-pointer ${
+                          isCustomGroup
+                            ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-xs'
+                            : 'border-dashed border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Plus size={14} />
+                        <span>Custom Line</span>
+                      </button>
                     </div>
+
+                    {isCustomGroup && (
+                      <div className="mt-3">
+                        <input
+                          type="text"
+                          placeholder="Enter new business line group name..."
+                          value={customGroupInput}
+                          onChange={(e) => {
+                            setCustomGroupInput(e.target.value);
+                            updateField('group', e.target.value);
+                          }}
+                          className="min-h-[44px] w-full rounded-xl border border-rose-300 bg-white px-3.5 text-sm text-slate-900 outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
+                          autoFocus
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="md:col-span-3">
@@ -558,6 +620,28 @@ export default function EditProductOrServicePage() {
 
                   <div>
                     <FieldLabel>Tax rate (%)</FieldLabel>
+                    {taxRates.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {taxRates.map((tr) => {
+                          const isSel = Number(form.taxRate) === Number(tr.rate);
+                          return (
+                            <button
+                              key={tr.id}
+                              type="button"
+                              onClick={() => updateField('taxRate', Number(tr.rate))}
+                              className={`rounded-md px-2 py-0.5 text-[11px] font-semibold border transition cursor-pointer ${
+                                isSel
+                                  ? 'border-amber-500 bg-amber-50 text-amber-800 font-bold'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                              }`}
+                              title={tr.name}
+                            >
+                              {tr.name} ({Number(tr.rate)}%)
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <input
                       type="number"
                       min="0"
@@ -587,8 +671,8 @@ export default function EditProductOrServicePage() {
                 <div className="mt-8 flex flex-col-reverse justify-end gap-3 border-t border-slate-200/80 pt-6 sm:flex-row">
                   <button
                     type="button"
-                    onClick={() => navigate(-1)}
-                    className="min-h-[44px] rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => navigate('/products-services-list')}
+                    className="min-h-[44px] rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 cursor-pointer"
                   >
                     Cancel
                   </button>

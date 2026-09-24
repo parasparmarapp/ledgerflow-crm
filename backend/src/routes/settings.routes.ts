@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { ah, idParam, parseBody, parseListQuery, sendList, zBool, zNum, zOptStr } from '../lib/http';
 import { badRequest, conflict, notFound } from '../lib/errors';
-import { requirePermission } from '../auth/permissions';
+import { requirePermission, can } from '../auth/permissions';
 import { invalidateUserCache } from '../auth/permissions';
 import { hashPassword } from '../auth/password';
 import { audit, actorFrom } from '../services/audit.service';
@@ -59,7 +59,11 @@ settingsRouter.put(
 
 const taxRateSchema = z.object({ name: z.string().trim().min(1), rate: zNum, components: z.any().optional(), isDefault: zBool.optional(), isActive: zBool.optional() });
 
-taxRatesRouter.get('/', requirePermission('settings.manage'), ah(async (_req, res) => res.json(await prisma.taxRate.findMany({ orderBy: { name: 'asc' } }))));
+taxRatesRouter.get('/', ah(async (req, res) => {
+  const canManage = can(req.user, 'settings.manage');
+  const where = canManage ? {} : { isActive: true };
+  res.json(await prisma.taxRate.findMany({ where, orderBy: { name: 'asc' } }));
+}));
 taxRatesRouter.post(
   '/',
   requirePermission('settings.manage'),

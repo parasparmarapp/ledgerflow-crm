@@ -1,7 +1,7 @@
 import type { Invoice } from '../types';
 import { useMemo, useState, useEffect } from 'react';
 import { api } from '../api';
-import { useInvoices } from '../hooks';
+import { useInvoices, useClients } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
@@ -94,6 +94,15 @@ export default function InvoiceListPage() {
     remove,
     sendInvoice,
   } = useInvoices();
+
+  const { data: clients = [] } = useClients();
+  const clientMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const c of clients) {
+      map.set(c.id, c.name || c.companyName || `Client #${c.id}`);
+    }
+    return map;
+  }, [clients]);
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
@@ -432,7 +441,7 @@ export default function InvoiceListPage() {
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
-                  Search by invoice number, client ID, or status.
+                  Search by invoice number, client name, or status.
                 </p>
               </div>
 
@@ -573,19 +582,22 @@ export default function InvoiceListPage() {
                     const invoiceLabel = String(
                       invoice.invoiceNumber || `Invoice ${invoice.id}`,
                     );
+                    const clientDisplayName =
+                      (invoice as any).client?.name ||
+                      (invoice as any).clientName ||
+                      clientMap.get(invoice.clientId) ||
+                      (invoice as any).client?.companyName ||
+                      `Client #${invoice.clientId}`;
 
                     return (
                       <tr
                         key={invoice.id}
                         className="transition hover:bg-slate-50/70"
                       >
-                        <td className="px-5 py-4">
+                        <td className="px-5 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-sm font-bold text-rose-600">
-                              {getInitials(invoiceLabel)}
-                            </div>
                             <div>
-                              <p className="font-mono text-sm font-semibold text-slate-900">
+                              <p className="font-mono text-sm font-semibold text-slate-900 whitespace-nowrap">
                                 {invoiceLabel}
                               </p>
                               <p className="text-xs text-slate-500">
@@ -594,8 +606,13 @@ export default function InvoiceListPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-4 text-sm text-slate-600">
-                          Client #{invoice.clientId}
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <p className="text-sm font-medium text-slate-900">
+                            {clientDisplayName}
+                          </p>
+                          {((invoice as any).client?.companyName && (invoice as any).client?.name !== (invoice as any).client?.companyName) && (
+                            <p className="text-xs text-slate-400">{(invoice as any).client.companyName}</p>
+                          )}
                         </td>
                         <td className="px-5 py-4 text-sm text-slate-600">
                           {formatDate(invoice.issueDate)}

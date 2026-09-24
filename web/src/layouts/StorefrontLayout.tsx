@@ -58,7 +58,6 @@ const NAV_SECTIONS: NavSection[] = [
       { name: 'Clients', path: '/clients', icon: Users },
       { name: 'Invoices', path: '/invoices', icon: FileText },
       { name: 'Payments', path: '/payments', icon: CreditCard },
-      { name: 'Record Payment', path: '/record-payment', icon: PlusCircle },
       { name: 'Recurring Invoices', path: '/recurring-invoices', icon: Repeat, adminOnly: true },
     ],
   },
@@ -153,10 +152,10 @@ export function StorefrontLayout() {
       {/* Brand Header */}
       <div className="p-5 border-b border-slate-200/90">
         <div className="flex items-center gap-3">
-          <img 
-            src="/icon.png" 
-            alt="LedgerFlow CRM" 
-            className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/70 p-0.5 bg-white shrink-0" 
+          <img
+            src="/icon.png"
+            alt="LedgerFlow CRM"
+            className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-200/70 p-0.5 bg-white shrink-0"
           />
           <div className="min-w-0">
             <span className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-1">
@@ -165,31 +164,6 @@ export function StorefrontLayout() {
             <p className="text-[10px] tracking-wider uppercase font-semibold text-slate-400 truncate">
               Finance & Operations
             </p>
-          </div>
-        </div>
-
-        {/* Active Workspace / Role Banner */}
-        <div className={`mt-4 p-2.5 rounded-xl border flex items-center gap-2.5 ${
-          isAdmin 
-            ? 'bg-amber-50/70 border-amber-200/80 text-amber-950' 
-            : 'bg-sky-50/70 border-sky-200/80 text-sky-950'
-        }`}>
-          {isAdmin ? (
-            <span className="p-1.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-200 shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </span>
-          ) : (
-            <span className="p-1.5 rounded-lg bg-sky-100 text-sky-800 border border-sky-200 shrink-0">
-              <UserCheck className="w-4 h-4" />
-            </span>
-          )}
-          <div className="truncate">
-            <div className="text-[11px] font-bold text-slate-900">
-              {isAdmin ? 'Admin Web Portal' : 'Staff Workspace'}
-            </div>
-            <div className="text-[10px] text-slate-500 capitalize font-medium">
-              Role: {currentRole}
-            </div>
           </div>
         </div>
       </div>
@@ -218,11 +192,10 @@ export function StorefrontLayout() {
                     navigate(item.path);
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${
-                    isActive
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer text-left ${isActive
                       ? 'bg-amber-500/10 text-amber-900 border-l-2 border-amber-600 pl-2.5 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                  }`}
+                    }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-amber-600' : 'text-slate-400'}`} />
                   <span className="truncate flex-1">{item.name}</span>
@@ -240,11 +213,10 @@ export function StorefrontLayout() {
             navigate('/profile');
             setSidebarOpen(false);
           }}
-          className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl border transition shadow-xs cursor-pointer text-left group ${
-            location.pathname === '/profile'
+          className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl border transition shadow-xs cursor-pointer text-left group ${location.pathname === '/profile'
               ? 'bg-amber-500/10 border-amber-300 text-amber-900'
               : 'bg-white border-slate-200 hover:border-amber-300 hover:bg-amber-50/40'
-          }`}
+            }`}
           title="Click to view profile details and change password"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
@@ -319,11 +291,10 @@ export function StorefrontLayout() {
 
           <div className="flex items-center gap-3">
             {/* Active Panel Badge in Header */}
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${
-              isAdmin
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs ${isAdmin
                 ? 'bg-amber-50 text-amber-800 border-amber-200'
                 : 'bg-sky-50 text-sky-800 border-sky-200'
-            }`}>
+              }`}>
               <span className={`w-2 h-2 rounded-full ${isAdmin ? 'bg-amber-500 animate-pulse' : 'bg-sky-500'}`} />
               <span className="font-bold">
                 {isAdmin ? 'Admin Web Portal' : 'Staff Workspace'}

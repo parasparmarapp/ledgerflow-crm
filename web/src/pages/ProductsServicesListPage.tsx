@@ -64,9 +64,16 @@ function GroupBadge({ group }: { group?: string }) {
       </span>
     );
   }
+  if (grp === 'Folding Partition') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300">
+        Folding Partition
+      </span>
+    );
+  }
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-300">
-      Folding Partition
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-900 border border-purple-300">
+      {grp}
     </span>
   );
 }
@@ -76,7 +83,7 @@ export default function ProductsServicesListPage() {
   const { data, loading, error, refresh, remove } = useProductServices();
 
   const [search, setSearch] = useState('');
-  const [groupFilter, setGroupFilter] = useState<'All' | 'Commodities' | 'CCTV' | 'Folding Partition'>('All');
+  const [groupFilter, setGroupFilter] = useState<string>('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [selectedItem, setSelectedItem] = useState<ProductService | null>(null);
@@ -127,9 +134,11 @@ export default function ProductsServicesListPage() {
     return filteredProducts.slice(start, start + PAGE_SIZE);
   }, [filteredProducts, page]);
 
-  const commoditiesCount = products.filter((i) => (i?.group || 'Commodities') === 'Commodities').length;
-  const cctvCount = products.filter((i) => i?.group === 'CCTV').length;
-  const partitionCount = products.filter((i) => i?.group === 'Folding Partition').length;
+  const distinctGroups = useMemo(() => {
+    const defaultGroups = ['Commodities', 'CCTV', 'Folding Partition'];
+    const fromProducts = products.map((p) => p.group).filter((g): g is string => Boolean(g));
+    return Array.from(new Set([...defaultGroups, ...fromProducts]));
+  }, [products]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -212,7 +221,7 @@ export default function ProductsServicesListPage() {
               Products &amp; Services
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Operating catalog organized under Commodities, CCTV Security Systems, and Folding Partitions.
+              Manage catalog items across all operating divisions and business lines.
             </p>
           </div>
           <button
@@ -229,9 +238,13 @@ export default function ProductsServicesListPage() {
         <div className="mb-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
           {[
             { key: 'All', label: 'All Business Lines', count: products.length },
-            { key: 'Commodities', label: 'Commodities', count: commoditiesCount },
-            { key: 'CCTV', label: 'CCTV Systems', count: cctvCount },
-            { key: 'Folding Partition', label: 'Folding Partitions', count: partitionCount },
+            ...distinctGroups.map((grp) => ({
+              key: grp,
+              label: grp,
+              count: products.filter(
+                (i) => (i?.group || 'Commodities').toLowerCase() === grp.toLowerCase()
+              ).length,
+            })),
           ].map((tab) => {
             const isActive = groupFilter === tab.key;
             return (
@@ -239,7 +252,7 @@ export default function ProductsServicesListPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => {
-                  setGroupFilter(tab.key as any);
+                  setGroupFilter(tab.key);
                   setPage(1);
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
@@ -249,9 +262,11 @@ export default function ProductsServicesListPage() {
                 }`}
               >
                 <span>{tab.label}</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                  isActive ? 'bg-amber-800 text-amber-100' : 'bg-slate-100 text-slate-600'
-                }`}>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    isActive ? 'bg-amber-800 text-amber-100' : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
                   {tab.count}
                 </span>
               </button>

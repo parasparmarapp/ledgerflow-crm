@@ -5,6 +5,7 @@ import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, BarChart3, Calendar, CheckCircle2, Download, Eye, FileText, RefreshCw, Search, X, XCircle, Printer } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -13,7 +14,7 @@ type ToastState = {
   type: ToastType;
 } | null;
 
-type DateRange = '30' | '90' | '365';
+type DateRange = '30' | '90' | '365' | 'custom';
 
 function formatDate(value: string | undefined): string {
   if (!value) return '—';
@@ -74,6 +75,8 @@ export default function SalesReportPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('30');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -97,7 +100,7 @@ export default function SalesReportPage() {
   const filteredInvoices = useMemo(() => {
     const query = search.trim().toLowerCase();
     const now = new Date();
-    const rangeDays = Number(dateRange);
+    const rangeDays = Number(dateRange) || 30;
     const earliestDate = new Date(now);
     earliestDate.setDate(now.getDate() - rangeDays);
 
@@ -113,14 +116,25 @@ export default function SalesReportPage() {
       .filter((invoice) => {
         const issueDate = new Date(invoice.issueDate);
         if (Number.isNaN(issueDate.getTime())) return true;
-        return issueDate >= earliestDate;
+        if (startDate) {
+          const s = new Date(startDate);
+          if (issueDate < s) return false;
+        }
+        if (endDate) {
+          const e = new Date(`${endDate}T23:59:59.999`);
+          if (issueDate > e) return false;
+        }
+        if (!startDate && !endDate) {
+          return issueDate >= earliestDate;
+        }
+        return true;
       })
       .sort(
         (first, second) =>
           new Date(second.issueDate).getTime() -
           new Date(first.issueDate).getTime(),
       );
-  }, [dateRange, invoices, search]);
+  }, [dateRange, startDate, endDate, invoices, search]);
 
   const metrics = useMemo(() => {
     const totalSales = filteredInvoices.reduce(
@@ -212,6 +226,10 @@ export default function SalesReportPage() {
     showToast('Sales report exported successfully.');
   };
 
+  function setPeriod(arg0: string) {
+    throw new Error('Function not implemented.');
+  }
+
   return (
     <div className="min-h-full bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -270,7 +288,9 @@ export default function SalesReportPage() {
               Export PDF
             </button>
           </div>
+          
         </div>
+        
 
         {error ? (
           <div className="mb-6 flex items-center justify-between gap-4 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-700">
@@ -287,6 +307,31 @@ export default function SalesReportPage() {
             </button>
           </div>
         ) : null}
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Calendar size={17} className="text-slate-400" />
+            Reporting period
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start);
+                setEndDate(end);
+                if (start || end) {
+                  setPeriod("custom");
+                } else {
+                  setPeriod("30");
+                }
+              }}
+              align="right"
+              placeholder="Select Date Range"
+            />
+          </div>
+        </div>
+
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
@@ -347,22 +392,7 @@ export default function SalesReportPage() {
                   Daily invoice value across the selected period.
                 </p>
               </div>
-              <div className="inline-flex rounded-lg bg-slate-100 p-1">
-                {(['30', '90', '365'] as DateRange[]).map((range) => (
-                  <button
-                    key={range}
-                    type="button"
-                    onClick={() => setDateRange(range)}
-                    className={`min-h-[36px] rounded-md px-3 text-xs font-semibold transition ${
-                      dateRange === range
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {range === '365' ? '12 months' : `${range} days`}
-                  </button>
-                ))}
-              </div>
+             
             </div>
 
             {chartData.length ? (

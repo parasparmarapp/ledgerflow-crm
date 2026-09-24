@@ -6,8 +6,9 @@ import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { Select } from '../components';
 import { AlertCircle, ArrowLeft, BarChart3, Calendar, CheckCircle2, ChevronRight, Clock, Download, Eye, FileText, RefreshCw, Search, X, XCircle, Printer } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
-type Period = "7" | "30" | "90" | "all";
+type Period = "7" | "30" | "90" | "all" | "custom";
 type ToastType = "success" | "error" | "info";
 
 type Toast = {
@@ -74,6 +75,8 @@ export default function PaymentsReportPage() {
   const navigate = useNavigate();
   const { data: payments, loading, error, refresh } = usePaymentsReport();
   const [period, setPeriod] = useState<Period>("30");
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -101,7 +104,23 @@ export default function PaymentsReportPage() {
     const query = search.trim().toLowerCase();
 
     return payments
-      .filter((payment) => isWithinPeriod(payment?.paymentDate, period))
+      .filter((payment) => {
+        if (!payment?.paymentDate) return false;
+        const date = new Date(payment.paymentDate);
+        if (Number.isNaN(date.getTime())) return false;
+        if (startDate) {
+          const s = new Date(startDate);
+          if (date < s) return false;
+        }
+        if (endDate) {
+          const e = new Date(`${endDate}T23:59:59.999`);
+          if (date > e) return false;
+        }
+        if (!startDate && !endDate) {
+          return isWithinPeriod(payment?.paymentDate, period);
+        }
+        return true;
+      })
       .filter((payment) => {
         if (statusFilter === "all") return true;
         return (payment?.status || "").toLowerCase() === statusFilter;
@@ -226,14 +245,6 @@ export default function PaymentsReportPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
           <div>
-            <button
-              type="button"
-              onClick={() => navigate(ROUTES.SCREEN_RECURRING_INVOICES)}
-              className="mb-4 inline-flex min-h-[40px] items-center gap-2 rounded-lg px-2 text-sm font-medium text-slate-500 transition hover:bg-white hover:text-slate-900"
-            >
-              <ArrowLeft size={16} />
-              Back to Recurring Invoices
-            </button>
             <div className="flex items-center gap-3">
               <div className="rounded-xl bg-rose-50 p-3 text-rose-600">
                 <BarChart3 size={24} />
@@ -281,26 +292,23 @@ export default function PaymentsReportPage() {
             <Calendar size={17} className="text-slate-400" />
             Reporting period
           </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              ["7", "Last 7 days"],
-              ["30", "Last 30 days"],
-              ["90", "Last 90 days"],
-              ["all", "All time"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPeriod(value as Period)}
-                className={`min-h-[40px] rounded-lg px-3 text-sm font-medium transition ${
-                  period === value
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-50 text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            
+            <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start);
+                setEndDate(end);
+                if (start || end) {
+                  setPeriod("custom");
+                } else {
+                  setPeriod("30");
+                }
+              }}
+              align="right"
+              placeholder="Select Date Range"
+            />
           </div>
         </div>
 

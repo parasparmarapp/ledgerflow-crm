@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   Upload,
   Trash2,
+  Plus,
 } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -27,12 +28,12 @@ type ToastState = {
   type: ToastType;
 } | null;
 
-type BusinessGroup = 'Commodities' | 'CCTV' | 'Folding Partition';
+type BusinessGroup = string;
 
 type ServiceForm = {
   name: string;
   description: string;
-  group: BusinessGroup;
+  group: string;
   type: 'product' | 'service';
   initialStock: string;
   sku: string;
@@ -64,11 +65,35 @@ import { compressImageFile } from '../lib/imageCompressor';
 
 export default function CreateServicePage() {
   const navigate = useNavigate();
-  const { create } = useProductServices();
+  const { create, data: existingProducts = [] } = useProductServices();
   const [form, setForm] = useState<ServiceForm>(initialForm);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+  const [isCustomGroup, setIsCustomGroup] = useState(false);
+  const [customGroupInput, setCustomGroupInput] = useState('');
+  const [taxRates, setTaxRates] = useState<{ id: number; name: string; rate: number; isDefault?: boolean }[]>([]);
+
+  useEffect(() => {
+    api.get<{ id: number; name: string; rate: number; isDefault?: boolean }[]>('/settings/tax-rates')
+      .then((res) => {
+        if (Array.isArray(res) && res.length > 0) {
+          setTaxRates(res);
+          const def = res.find((r) => r.isDefault);
+          if (def) {
+            setForm((current) => ({ ...current, taxRate: String(def.rate) }));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const allGroups: string[] = [
+    'Commodities',
+    'CCTV',
+    'Folding Partition',
+    ...Array.from(new Set(existingProducts.map((p) => p.group).filter((g): g is string => Boolean(g)))),
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
   useEffect(() => {
     if (!toast) return;
@@ -111,6 +136,10 @@ export default function CreateServicePage() {
       nextErrors.initialStock = 'Initial stock cannot be negative.';
     }
 
+    if (isCustomGroup && !customGroupInput.trim()) {
+      nextErrors.group = 'Please enter a name for the new business line.';
+    }
+
     return nextErrors;
   };
 
@@ -120,17 +149,18 @@ export default function CreateServicePage() {
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
-      showToast('Please correct highlighted fields.', 'error');
+      showToast(nextErrors.group || 'Please correct highlighted fields.', 'error');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      const finalGroup = (isCustomGroup ? customGroupInput.trim() : form.group) || 'General';
       await create({
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        group: form.group,
+        group: finalGroup,
         type: form.type,
         sku: form.sku.trim() || undefined,
         imageUrl: form.imageUrl.trim() || undefined,
@@ -209,33 +239,41 @@ export default function CreateServicePage() {
 
               {/* 1. Business Line Selection */}
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="rounded-xl bg-amber-50 p-2.5 text-amber-600 border border-amber-200">
-                    <Building2 size={20} />
-                  </div>
-                  <div>
-                    <h2 className="font-bold text-slate-900">1. Select Business Line Group</h2>
-                    <p className="text-sm text-slate-500">
-                      Assign this item to its core operating division.
-                    </p>
+                <div className="mb-5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-xl bg-amber-50 p-2.5 text-amber-600 border border-amber-200">
+                      <Building2 size={20} />
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-slate-900">1. Select Business Line Group</h2>
+                      <p className="text-sm text-slate-500">
+                        Assign this item to an existing business line or create a new one.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {(['Commodities', 'CCTV', 'Folding Partition'] as BusinessGroup[]).map((grp) => {
-                    const isSelected = form.group === grp;
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {allGroups.map((grp) => {
+                    const isSelected = !isCustomGroup && form.group === grp;
                     return (
                       <button
                         key={grp}
                         type="button"
-                        onClick={() => setForm((c) => ({ ...c, group: grp }))}
+                        onClick={() => {
+                          setIsCustomGroup(false);
+                          setForm((c) => ({ ...c, group: grp }));
+                          setErrors((c) => ({ ...c, group: undefined }));
+                        }}
                         className={`p-4 rounded-xl border text-left transition cursor-pointer ${
                           isSelected
                             ? grp === 'Commodities'
                               ? 'border-amber-500 bg-amber-50/70 text-amber-900 ring-2 ring-amber-500/20'
                               : grp === 'CCTV'
                               ? 'border-sky-500 bg-sky-50/70 text-sky-900 ring-2 ring-sky-500/20'
-                              : 'border-emerald-500 bg-emerald-50/70 text-emerald-900 ring-2 ring-emerald-500/20'
+                              : grp === 'Folding Partition'
+                              ? 'border-emerald-500 bg-emerald-50/70 text-emerald-900 ring-2 ring-emerald-500/20'
+                              : 'border-purple-500 bg-purple-50/70 text-purple-900 ring-2 ring-purple-500/20'
                             : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-700'
                         }`}
                       >
@@ -249,11 +287,62 @@ export default function CreateServicePage() {
                           {grp === 'Commodities' && 'Raw materials, bulk steel, copper, timber'}
                           {grp === 'CCTV' && 'Surveillance, IP cameras, NVRs, cabling'}
                           {grp === 'Folding Partition' && 'Acoustic walls, sliding partitions'}
+                          {!['Commodities', 'CCTV', 'Folding Partition'].includes(grp) && 'Custom business line'}
                         </p>
                       </button>
                     );
                   })}
+
+                  {/* Add New Line Option */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomGroup(true);
+                      setErrors((c) => ({ ...c, group: undefined }));
+                    }}
+                    className={`p-4 rounded-xl border border-dashed text-left transition cursor-pointer flex flex-col justify-center ${
+                      isCustomGroup
+                        ? 'border-amber-500 bg-amber-50/70 text-amber-900 ring-2 ring-amber-500/20'
+                        : 'border-slate-300 bg-slate-50/50 hover:bg-white text-slate-600 hover:border-slate-400'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Plus size={14} className="text-amber-600" />
+                        + Add New Line
+                      </span>
+                      {isCustomGroup && <CheckCircle2 size={16} className="text-amber-600" />}
+                    </div>
+                    <p className="text-xs opacity-75">
+                      Define a new division or category
+                    </p>
+                  </button>
                 </div>
+
+                {/* Custom Business Line Input */}
+                {isCustomGroup && (
+                  <div className="mt-4 p-4 rounded-xl border border-amber-300 bg-amber-50/40">
+                    <label className="block text-xs font-bold text-amber-900 mb-1.5">
+                      New Business Line Name <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={customGroupInput}
+                        onChange={(e) => {
+                          setCustomGroupInput(e.target.value);
+                          setErrors((c) => ({ ...c, group: undefined }));
+                        }}
+                        placeholder="e.g. Solar Energy, IT Services, Electrical Supplies"
+                        className="flex-1 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                        autoFocus
+                      />
+                    </div>
+                    {errors.group && (
+                      <p className="mt-1 text-xs text-red-600 font-medium">{errors.group}</p>
+                    )}
+                  </div>
+                )}
               </section>
 
               {/* 2. Item Details */}
@@ -480,6 +569,28 @@ export default function CreateServicePage() {
                     <label htmlFor="taxRate" className="mb-2 block text-sm font-semibold text-slate-700">
                       Tax Rate (%)
                     </label>
+                    {taxRates.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2.5">
+                        {taxRates.map((tr) => {
+                          const isSel = Number(form.taxRate) === Number(tr.rate);
+                          return (
+                            <button
+                              key={tr.id}
+                              type="button"
+                              onClick={() => setForm((prev) => ({ ...prev, taxRate: String(tr.rate) }))}
+                              className={`rounded-lg px-2.5 py-1 text-xs font-semibold border transition cursor-pointer ${
+                                isSel
+                                  ? 'border-amber-500 bg-amber-50 text-amber-800 font-bold shadow-xs'
+                                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                              }`}
+                              title={tr.name}
+                            >
+                              {tr.name} ({Number(tr.rate)}%)
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                     <input
                       id="taxRate"
                       name="taxRate"
@@ -517,7 +628,9 @@ export default function CreateServicePage() {
                 <div className="space-y-3 pb-4 border-b border-slate-100 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Group:</span>
-                    <span className="font-bold text-slate-900">{form.group}</span>
+                    <span className="font-bold text-slate-900">
+                      {isCustomGroup ? (customGroupInput.trim() || 'New Business Line') : form.group}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Type:</span>

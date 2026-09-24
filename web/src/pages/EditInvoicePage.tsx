@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useClients, useInvoices, useProductServices } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Select, DatePicker } from '../components';
+import { Select, DatePicker, ProductItemCombobox, CatalogPickerModal } from '../components';
 import {
   ArrowLeft,
   Calendar,
@@ -19,6 +19,7 @@ import {
   Edit3,
   ShieldAlert,
   ChevronDown,
+  Boxes,
 } from 'lucide-react';
 
 interface EditableLine {
@@ -67,6 +68,15 @@ export default function EditInvoicePage() {
   const [terms, setTerms] = useState<string>('');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [lines, setLines] = useState<EditableLine[]>([]);
+  const [taxRates, setTaxRates] = useState<{ id: number; name: string; rate: number; isDefault?: boolean }[]>([]);
+
+  useEffect(() => {
+    api.get<{ id: number; name: string; rate: number; isDefault?: boolean }[]>('/settings/tax-rates')
+      .then((res) => {
+        if (Array.isArray(res)) setTaxRates(res);
+      })
+      .catch(() => {});
+  }, []);
 
   // States
   const [revisionRequired, setRevisionRequired] = useState(false);
@@ -183,7 +193,41 @@ export default function EditInvoicePage() {
     });
   };
 
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+
+  const handleCatalogSelect = (prod: ProductService) => {
+    // If only 1 line exists and it is empty/untouched, replace it
+    if (lines.length === 1 && !lines[0].productServiceId && !lines[0].description.trim()) {
+      setLines([
+        {
+          productServiceId: prod.id,
+          description: prod.description || prod.name,
+          quantity: 1,
+          unitPrice: Number(prod.unitPrice || 0),
+          discountAmount: 0,
+          taxRate: Number(prod.taxRate || 0),
+          lineTotal: computeLineTotal(1, Number(prod.unitPrice || 0), 0, Number(prod.taxRate || 0)),
+        },
+      ]);
+    } else {
+      setLines((prev) => [
+        ...prev,
+        {
+          productServiceId: prod.id,
+          description: prod.description || prod.name,
+          quantity: 1,
+          unitPrice: Number(prod.unitPrice || 0),
+          discountAmount: 0,
+          taxRate: Number(prod.taxRate || 0),
+          lineTotal: computeLineTotal(1, Number(prod.unitPrice || 0), 0, Number(prod.taxRate || 0)),
+        },
+      ]);
+    }
+    showToast(`Added "${prod.name}" to invoice`, 'success');
+  };
+
   const addLine = () => {
+    const defaultRate = taxRates.find((t) => t.isDefault)?.rate ?? 0;
     setLines((prev) => [
       ...prev,
       {
@@ -191,7 +235,7 @@ export default function EditInvoicePage() {
         quantity: 1,
         unitPrice: 0,
         discountAmount: 0,
-        taxRate: 0,
+        taxRate: Number(defaultRate),
         lineTotal: 0,
       },
     ]);
@@ -464,29 +508,39 @@ export default function EditInvoicePage() {
             </div>
 
             {/* Line Items Editor Card */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+              <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-bold text-slate-900">Line Items</h2>
-                  <p className="text-xs text-slate-400">Add catalog items or manual services</p>
+                  <p className="text-xs text-slate-400">Add catalog items or manual services with live pricing and stock</p>
                 </div>
                 {!isLocked && (
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100 shadow-xs"
-                  >
-                    <Plus size={14} />
-                    <span>Add Item</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 shadow-2xs cursor-pointer"
+                    >
+                      <Boxes size={14} />
+                      <span>Browse Catalog</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addLine}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-white shadow-2xs cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      <span>Add Blank Row</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
-              <div className="overflow-x-auto p-4">
+              <div className="overflow-x-visible p-4">
                 <table className="w-full text-left text-xs">
                   <thead className="border-b border-slate-200 bg-slate-50 font-bold uppercase tracking-wider text-slate-500">
                     <tr>
-                      <th className="py-2.5 px-3 min-w-[200px]">Catalog Item</th>
+                      <th className="py-2.5 px-3 min-w-[280px]">Catalog Item</th>
                       <th className="py-2.5 px-3 min-w-[220px]">Description</th>
                       <th className="py-2.5 px-2 text-right w-20">Qty</th>
                       <th className="py-2.5 px-2 text-right w-28">Unit Price</th>
@@ -499,21 +553,14 @@ export default function EditInvoicePage() {
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {lines.map((line, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="py-2 px-3">
-                          <Select
+                        <td className="py-2 px-3 align-top">
+                          <ProductItemCombobox
                             disabled={isLocked}
-                            value={line.productServiceId || ''}
+                            products={catalog}
+                            value={line.productServiceId || undefined}
                             onChange={(val) => handleSelectProduct(idx, Number(val))}
+                            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
                             placeholder="Custom Item"
-                            options={[
-                              { value: '', label: 'Custom Item' },
-                              ...catalog.map((p) => ({
-                                value: p.id,
-                                label: `${p.name} (${formatCurrency(Number(p.unitPrice))})`,
-                              })),
-                            ]}
-                            searchable
-                            className="min-w-[180px]"
                           />
                         </td>
                         <td className="py-2 px-3">
@@ -560,16 +607,36 @@ export default function EditInvoicePage() {
                           />
                         </td>
                         <td className="py-2 px-2 text-right">
-                          <input
-                            disabled={isLocked}
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={line.taxRate}
-                            onChange={(e) => updateLine(idx, { taxRate: Number(e.target.value) || 0 })}
-                            className="w-full rounded-lg border border-slate-200 p-2 text-xs text-right font-mono text-slate-800"
-                          />
+                          <div className="flex flex-col gap-1">
+                            <input
+                              disabled={isLocked}
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={line.taxRate}
+                              onChange={(e) => updateLine(idx, { taxRate: Number(e.target.value) || 0 })}
+                              className="w-full rounded-lg border border-slate-200 p-2 text-xs text-right font-mono text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
+                            />
+                            {!isLocked && taxRates.length > 0 && (
+                              <select
+                                value={taxRates.some((t) => Number(t.rate) === Number(line.taxRate)) ? Number(line.taxRate) : 'custom'}
+                                onChange={(e) => {
+                                  if (e.target.value !== 'custom') {
+                                    updateLine(idx, { taxRate: Number(e.target.value) });
+                                  }
+                                }}
+                                className="w-full text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1 py-0.5 focus:border-amber-500 focus:outline-none cursor-pointer"
+                              >
+                                <option value="custom">Preset...</option>
+                                {taxRates.map((tr) => (
+                                  <option key={tr.id} value={Number(tr.rate)}>
+                                    {tr.name} ({Number(tr.rate)}%)
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
                           {formatCurrency(line.lineTotal)}
@@ -735,6 +802,14 @@ export default function EditInvoicePage() {
           </div>
         </div>
       )}
+
+      {/* Product Catalog Picker Modal */}
+      <CatalogPickerModal
+        isOpen={isCatalogModalOpen}
+        onClose={() => setIsCatalogModalOpen(false)}
+        products={catalog}
+        onSelectProduct={handleCatalogSelect}
+      />
 
       {/* Toast */}
       {toast && (

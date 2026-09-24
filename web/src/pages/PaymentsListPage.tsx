@@ -4,7 +4,7 @@ import { api } from '../api';
 import { usePayments } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DateRangeFilter, RecordPaymentModal, TablePagination } from '../components';
 import { AlertCircle, ArrowRight, CheckCircle2, ChevronRight, Clock, CreditCard, Download, Eye, FileText, Filter, Loader2, MoreVertical, Plus, RefreshCw, Search, Trash2, X, XCircle } from 'lucide-react';
 
@@ -79,6 +79,7 @@ function getInitials(value: string): string {
 
 export default function PaymentsListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: payments, loading, error, refresh, remove } = usePayments();
 
   const [search, setSearch] = useState('');
@@ -89,7 +90,9 @@ export default function PaymentsListPage() {
   const PAGE_SIZE = 10;
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
-  const [showRecordModal, setShowRecordModal] = useState(false);
+  const [showRecordModal, setShowRecordModal] = useState(
+    () => searchParams.get('action') === 'record' || searchParams.get('record') === 'true',
+  );
   const [voidReason, setVoidReason] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -711,8 +714,23 @@ export default function PaymentsListPage() {
 
       <RecordPaymentModal
         isOpen={showRecordModal}
-        onClose={() => setShowRecordModal(false)}
+        onClose={() => {
+          setShowRecordModal(false);
+          if (searchParams.get('action') || searchParams.get('record')) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('action');
+            next.delete('record');
+            setSearchParams(next, { replace: true });
+          }
+        }}
         onSuccess={() => {
+          setShowRecordModal(false);
+          if (searchParams.get('action') || searchParams.get('record')) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('action');
+            next.delete('record');
+            setSearchParams(next, { replace: true });
+          }
           showToast('Payment recorded successfully!');
           refresh();
         }}

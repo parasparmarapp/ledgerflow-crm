@@ -6,10 +6,11 @@ import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { Select } from '../components';
 import { AlertCircle, ArrowLeft, ArrowRight, BarChart3, Calendar, CheckCircle2, DollarSign, Download, FileText, RefreshCw, Search, XCircle, Activity as ActivityIcon, Printer } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 type ToastType = "success" | "error" | "info";
 type ToastState = { message: string; type: ToastType } | null;
-type Period = "30 days" | "90 days" | "12 months";
+type Period = "30 days" | "90 days" | "12 months" | "custom";
 
 function formatDate(value: string | undefined): string {
   if (!value) return "—";
@@ -50,6 +51,8 @@ export default function RevenueReportPage() {
   const navigate = useNavigate();
   const { data: invoices, loading: isLoading, error, refresh } = useRevenueReport();
   const [period, setPeriod] = useState<Period>("12 months");
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -90,9 +93,21 @@ export default function RevenueReportPage() {
     () =>
       invoices.filter((invoice) => {
         const issueDate = new Date(invoice.issueDate);
-        return !Number.isNaN(issueDate.getTime()) && issueDate >= periodStart;
+        if (Number.isNaN(issueDate.getTime())) return false;
+        if (startDate) {
+          const s = new Date(startDate);
+          if (issueDate < s) return false;
+        }
+        if (endDate) {
+          const e = new Date(`${endDate}T23:59:59.999`);
+          if (issueDate > e) return false;
+        }
+        if (!startDate && !endDate) {
+          return issueDate >= periodStart;
+        }
+        return true;
       }),
-    [invoices, periodStart],
+    [invoices, periodStart, startDate, endDate],
   );
 
   const totalRevenue = useMemo(
@@ -245,13 +260,14 @@ export default function RevenueReportPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
+           <button
             type="button"
-            onClick={() => navigate(ROUTES.SCREEN_RECURRING_INVOICES)}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            onClick={() => void loadReport(true)}
+            disabled={isRefreshing}
+            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to recurring invoices
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            Refresh
           </button>
           <button
             type="button"
@@ -269,15 +285,7 @@ export default function RevenueReportPage() {
             <Printer className="h-4 w-4" />
             Export PDF
           </button>
-          <button
-            type="button"
-            onClick={() => void loadReport(true)}
-            disabled={isRefreshing}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+         
         </div>
       </div>
 
@@ -286,21 +294,23 @@ export default function RevenueReportPage() {
           <Calendar className="h-4 w-4 text-slate-400" />
           Reporting period
         </div>
-        <div className="flex flex-wrap gap-2">
-          {(["30 days", "90 days", "12 months"] as Period[]).map((option) => (
-            <button
-              type="button"
-              key={option}
-              onClick={() => setPeriod(option)}
-              className={`min-h-[40px] rounded-lg px-4 text-sm font-medium transition ${
-                period === option
-                  ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              {option}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+              if (start || end) {
+                setPeriod("custom");
+              } else {
+                setPeriod("12 months");
+              }
+            }}
+            align="right"
+            placeholder="Custom Date Range"
+          />
         </div>
       </div>
 

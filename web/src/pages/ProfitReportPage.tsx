@@ -4,6 +4,7 @@ import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, BarChart3, Calendar, CheckCircle2, Download, RefreshCw, TrendingDown, TrendingUp, XCircle, Printer } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -56,6 +57,8 @@ export default function ProfitReportPage() {
   const navigate = useNavigate();
   const { report, rows, loading: isLoading, error, refresh } = useProfitReport();
   const [period, setPeriod] = useState('12 months');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -77,13 +80,24 @@ export default function ProfitReportPage() {
   };
 
   const visibleRows = useMemo(() => {
+    if (startDate || endDate) {
+      return rows.filter((r) => {
+        const val = String(r.date || r.period || r.label || '');
+        const d = new Date(val);
+        if (Number.isNaN(d.getTime())) return true;
+        if (startDate && d < new Date(startDate)) return false;
+        if (endDate && d > new Date(`${endDate}T23:59:59.999`)) return false;
+        return true;
+      });
+    }
+
     if (period === '12 months') {
       return rows;
     }
 
     const limit = period === '30 days' ? 1 : period === '7 days' ? 1 : 1;
     return rows.slice(-limit);
-  }, [period, rows]);
+  }, [period, rows, startDate, endDate]);
 
   const totals = useMemo(() => {
     const revenueFromRows = visibleRows.reduce(
@@ -218,14 +232,6 @@ export default function ProfitReportPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(ROUTES.SCREEN_RECURRING_INVOICES)}
-            className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-          <button
-            type="button"
             onClick={() => void loadReport(true)}
             disabled={isRefreshing}
             className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -257,21 +263,22 @@ export default function ProfitReportPage() {
           <Calendar className="h-4 w-4 text-slate-400" />
           Reporting period
         </div>
-        <div className="flex flex-wrap gap-2">
-          {['7 days', '30 days', '12 months'].map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setPeriod(option)}
-              className={`min-h-[40px] rounded-lg px-4 py-2 text-sm font-semibold transition ${
-                period === option
-                  ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-200'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <DateRangeFilter
+            startDate={startDate}
+            endDate={endDate}
+            onChange={(start, end) => {
+              setStartDate(start);
+              setEndDate(end);
+              if (start || end) {
+                setPeriod('custom');
+              } else {
+                setPeriod('12 months');
+              }
+            }}
+            align="right"
+            placeholder="Custom Date Range"
+          />
         </div>
       </div>
 

@@ -200,10 +200,33 @@ export type InventoryItemResponse = InventoryItem;
 export interface StockMovement {
   id: number;
   inventoryItemId: number;
-  userId: number;
+  userId?: number | null;
   quantityChange: number;
+  previousQuantity?: number | null;
+  balanceAfter?: number | null;
   reason: string;
+  reasonCode?: string | null;
   notes?: string;
+  productName?: string;
+  sku?: string;
+  userName?: string;
+  item?: {
+    id: number;
+    productServiceId: number;
+    product?: {
+      id: number;
+      name: string;
+      sku: string;
+      group?: string;
+      unit?: string;
+    };
+  };
+  user?: {
+    id: number;
+    name: string;
+    email?: string;
+    role?: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
   [key: string]: any;

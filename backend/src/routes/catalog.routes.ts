@@ -42,7 +42,13 @@ productsRouter.get(
     const s = search || lq.search;
     if (s) where.OR = [{ name: { contains: s, mode: 'insensitive' } }, { sku: { contains: s, mode: 'insensitive' } }, { description: { contains: s, mode: 'insensitive' } }];
     const [rows, total] = await Promise.all([
-      prisma.productService.findMany({ where, orderBy: lq.sort ? { [lq.sort.field]: lq.sort.direction } : { id: 'desc' }, skip: lq.skip, take: lq.take }),
+      prisma.productService.findMany({
+        where,
+        include: { inventoryItem: { select: { quantityOnHand: true, location: true } } },
+        orderBy: lq.sort ? { [lq.sort.field]: lq.sort.direction } : { id: 'desc' },
+        skip: lq.skip,
+        take: lq.take,
+      }),
       prisma.productService.count({ where }),
     ]);
     sendList(res, rows, total, lq);
@@ -231,9 +237,86 @@ stockMovementsRouter.get(
     if (reasonCode) where.reasonCode = reasonCode;
     if (lq.from || lq.to) where.createdAt = { ...(lq.from ? { gte: lq.from } : {}), ...(lq.to ? { lte: lq.to } : {}) };
     const [rows, total] = await Promise.all([
-      prisma.stockMovement.findMany({ where, orderBy: { createdAt: 'desc' }, skip: lq.skip, take: lq.take }),
+      prisma.stockMovement.findMany({
+        where,
+        include: {
+          item: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  sku: true,
+                  group: true,
+                  unit: true,
+                },
+              },
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: lq.skip,
+        take: lq.take,
+      }),
       prisma.stockMovement.count({ where }),
     ]);
-    sendList(res, rows, total, lq);
+
+    const enriched = rows.map((m) => ({
+      ...m,
+      productName: m.item?.product?.name || `Item #${m.inventoryItemId}`,
+      sku: m.item?.product?.sku || '—',
+      userName: m.user?.name || (m.userId ? `User ${m.userId}` : 'System'),
+    }));
+
+    sendList(res, enriched, total, lq);
   }),
 );
+
+stockMovementsRouter.get(
+  '/:id',
+  requirePermission('inventory.read'),
+  ah(async (req, res) => {
+    const m = await prisma.stockMovement.findUnique({
+      where: { id: idParam(req) },
+      include: {
+        item: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                group: true,
+                unit: true,
+              },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+    if (!m) throw notFound('Stock movement');
+    res.json({
+      ...m,
+      productName: m.item?.product?.name || `Item #${m.inventoryItemId}`,
+      sku: m.item?.product?.sku || '—',
+      userName: m.user?.name || (m.userId ? `User ${m.userId}` : 'System'),
+    });
+  }),
+);
+

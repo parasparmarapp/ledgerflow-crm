@@ -6,6 +6,7 @@ import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, ChevronRight, Download, Eye, RefreshCw, Search, X, XCircle, Activity as ActivityIcon } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -19,6 +20,8 @@ export default function PaymentReconciliationPage() {
   const { data: payments, loading, error, refresh, reconcile } = usePayments();
 
   const [search, setSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -35,6 +38,15 @@ export default function PaymentReconciliationPage() {
     const normalizedSearch = search.trim().toLowerCase();
 
     return (payments || []).filter((payment) => {
+      if (startDate) {
+        const d = new Date(payment?.paymentDate);
+        if (d < new Date(startDate)) return false;
+      }
+      if (endDate) {
+        const d = new Date(payment?.paymentDate);
+        if (d > new Date(`${endDate}T23:59:59.999`)) return false;
+      }
+
       const paymentStatus = String(payment?.status || '').toLowerCase();
       const searchableText = [
         payment?.id,
@@ -56,7 +68,7 @@ export default function PaymentReconciliationPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [payments, search, statusFilter]);
+  }, [payments, search, statusFilter, startDate, endDate]);
 
   const selectedPayments = useMemo(
     () => (payments || []).filter((payment) => selectedIds.includes(payment.id)),
@@ -322,51 +334,64 @@ export default function PaymentReconciliationPage() {
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setStatusFilter('all')}
-                className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition ${
-                  statusFilter === 'all'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('pending')}
-                className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition ${
-                  statusFilter === 'pending'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Pending
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('unreconciled')}
-                className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition ${
-                  statusFilter === 'unreconciled'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Unreconciled
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter('reconciled')}
-                className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition ${
-                  statusFilter === 'reconciled'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Reconciled
-              </button>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('pending')}
+                  className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition cursor-pointer ${
+                    statusFilter === 'pending'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Pending
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('unreconciled')}
+                  className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition cursor-pointer ${
+                    statusFilter === 'unreconciled'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Unreconciled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('reconciled')}
+                  className={`min-h-[36px] rounded-lg px-3 text-sm font-semibold transition cursor-pointer ${
+                    statusFilter === 'reconciled'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Reconciled
+                </button>
+              </div>
+
+              <DateRangeFilter
+                startDate={startDate}
+                endDate={endDate}
+                onChange={(start, end) => {
+                  setStartDate(start);
+                  setEndDate(end);
+                }}
+                align="right"
+                placeholder="Filter by Date"
+              />
             </div>
           </div>
 

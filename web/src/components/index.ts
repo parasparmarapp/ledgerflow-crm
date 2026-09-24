@@ -5,3 +5,5 @@ export * from './ClientImportModal';
 export * from './DateRangeFilter';
 export * from './TablePagination';
 export * from './RecordPaymentModal';
+export * from './ProductItemCombobox';
+export * from './CatalogPickerModal';

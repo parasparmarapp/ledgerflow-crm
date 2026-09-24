@@ -3,7 +3,7 @@ import { useClients, useProductServices, useInvoices } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { Select, DatePicker } from '../components';
+import { Select, DatePicker, ProductItemCombobox, CatalogPickerModal } from '../components';
 import { 
   AlertCircle,
   ArrowLeft,
@@ -11,7 +11,9 @@ import {
   Save,
   Plus,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  Boxes,
+  Package
 } from 'lucide-react';
 
 type LineItem = {
@@ -80,7 +82,56 @@ export default function CreateInvoicePage() {
     window.setTimeout(() => setToast(null), 3000);
   };
 
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+  const [taxRates, setTaxRates] = useState<{ id: number; name: string; rate: number; isDefault?: boolean }[]>([]);
+
+  useEffect(() => {
+    api.get<{ id: number; name: string; rate: number; isDefault?: boolean }[]>('/settings/tax-rates')
+      .then((res) => {
+        if (Array.isArray(res) && res.length > 0) {
+          setTaxRates(res);
+          const def = res.find((r) => r.isDefault);
+          if (def) {
+            setLineItems((prev) =>
+              prev.map((item, idx) =>
+                idx === 0 && !item.productServiceId && item.taxRate === 10
+                  ? { ...item, taxRate: Number(def.rate) }
+                  : item
+              )
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCatalogSelect = (prod: any) => {
+    // If there is only 1 item and it's untouched/empty, replace it
+    if (
+      lineItems.length === 1 &&
+      !lineItems[0].productServiceId &&
+      (!lineItems[0].description.trim() || lineItems[0].description === 'Consultation & Initial Setup')
+    ) {
+      setLineItems([
+        {
+          id: lineItems[0].id,
+          productServiceId: prod.id,
+          description: prod.name,
+          group: prod.group,
+          quantity: 1,
+          unitPrice: Number(prod.unitPrice || 0),
+          taxRate: Number(prod.taxRate !== undefined && prod.taxRate !== null ? prod.taxRate : (taxRates.find((t) => t.isDefault)?.rate ?? 0)),
+          discountAmount: 0,
+        },
+      ]);
+    } else {
+      addLineItem(prod);
+    }
+    showToast(`Added "${prod.name}" to invoice`, 'success');
+  };
+
   const addLineItem = (prod?: any) => {
+    const defaultRate = taxRates.find((t) => t.isDefault)?.rate ?? 0;
     if (prod) {
       setLineItems((prev) => [
         ...prev,
@@ -91,7 +142,7 @@ export default function CreateInvoicePage() {
           group: prod.group,
           quantity: 1,
           unitPrice: Number(prod.unitPrice || 0),
-          taxRate: Number(prod.taxRate || 0),
+          taxRate: Number(prod.taxRate !== undefined && prod.taxRate !== null ? prod.taxRate : defaultRate),
           discountAmount: 0,
         },
       ]);
@@ -103,7 +154,7 @@ export default function CreateInvoicePage() {
           description: '',
           quantity: 1,
           unitPrice: 0,
-          taxRate: 0,
+          taxRate: Number(defaultRate),
           discountAmount: 0,
         },
       ]);
@@ -342,30 +393,40 @@ export default function CreateInvoicePage() {
 
           {/* 2. Line Items Table with Inline Searchable Product Selector */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">
                   Invoice Line Items
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Search and pick catalog products or add custom line items.
+                  Search and pick catalog products with live stock info or add custom line items.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => addLineItem()}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={14} />
-                Add Blank Row
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCatalogModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                >
+                  <Boxes size={15} />
+                  <span>Browse Catalog</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addLineItem()}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>Add Blank Row</span>
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-visible">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-50 font-bold uppercase tracking-wider text-slate-500">
                   <tr>
-                    <th className="px-3 py-3 w-64">Product / Service</th>
+                    <th className="px-3 py-3 min-w-[280px]">Product / Service</th>
                     <th className="px-3 py-3 min-w-[200px]">Description &amp; Notes</th>
                     <th className="px-2 py-3 w-20">Qty</th>
                     <th className="px-3 py-3 w-28">Unit Price</th>
@@ -379,19 +440,13 @@ export default function CreateInvoicePage() {
                     const itemLineTotal = Number(item.quantity || 1) * Number(item.unitPrice || 0);
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/70">
-                        <td className="px-3 py-3">
-                          <Select
-                            value={item.productServiceId || ''}
-                            onChange={(val) => handleSelectProduct(item.id, val ? Number(val) : '')}
+                        <td className="px-3 py-3 align-top">
+                          <ProductItemCombobox
+                            products={products}
+                            value={item.productServiceId}
+                            onChange={(val) => handleSelectProduct(item.id, val)}
+                            onOpenCatalogModal={() => setIsCatalogModalOpen(true)}
                             placeholder="Custom / Non-Catalog Item"
-                            options={[
-                              { value: '', label: 'Custom / Non-Catalog Item' },
-                              ...products.map((p) => ({
-                                value: p.id,
-                                label: `[${p.group || 'Commodities'}] ${p.name} - ${formatCurrency(Number(p.unitPrice || 0))}`,
-                              })),
-                            ]}
-                            searchable
                           />
                         </td>
                         <td className="px-3 py-3">
@@ -423,15 +478,35 @@ export default function CreateInvoicePage() {
                           />
                         </td>
                         <td className="px-2 py-3">
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            value={item.taxRate}
-                            onChange={(e) => updateLineItem(item.id, 'taxRate', Number(e.target.value))}
-                            className="w-full min-h-[38px] p-2 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 text-center"
-                          />
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={item.taxRate}
+                              onChange={(e) => updateLineItem(item.id, 'taxRate', Number(e.target.value))}
+                              className="w-full min-h-[34px] p-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 text-center focus:border-amber-500 focus:outline-none"
+                            />
+                            {taxRates.length > 0 && (
+                              <select
+                                value={taxRates.some((t) => Number(t.rate) === Number(item.taxRate)) ? Number(item.taxRate) : 'custom'}
+                                onChange={(e) => {
+                                  if (e.target.value !== 'custom') {
+                                    updateLineItem(item.id, 'taxRate', Number(e.target.value));
+                                  }
+                                }}
+                                className="w-full text-[10px] text-slate-500 bg-slate-50 border border-slate-200 rounded px-1 py-0.5 focus:border-amber-500 focus:outline-none cursor-pointer"
+                              >
+                                <option value="custom">Preset...</option>
+                                {taxRates.map((tr) => (
+                                  <option key={tr.id} value={Number(tr.rate)}>
+                                    {tr.name} ({Number(tr.rate)}%)
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-3 font-mono font-bold text-right text-slate-900">
                           {formatCurrency(itemLineTotal)}
@@ -522,6 +597,14 @@ export default function CreateInvoicePage() {
           </div>
         </form>
       </div>
+
+      {/* Product Catalog Picker Modal */}
+      <CatalogPickerModal
+        isOpen={isCatalogModalOpen}
+        onClose={() => setIsCatalogModalOpen(false)}
+        products={products}
+        onSelectProduct={handleCatalogSelect}
+      />
 
       {toast && (
         <div className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white shadow-xl ${

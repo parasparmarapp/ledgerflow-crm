@@ -6,9 +6,10 @@ import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { Select } from '../components';
 import { AlertCircle, ArrowLeft, BarChart3, Calendar, CheckCircle2, ChevronRight, DollarSign, Download, Filter, RefreshCw, Search, X, XCircle, Printer } from 'lucide-react';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 
 type ToastType = 'success' | 'error' | 'info';
-type Period = '30' | '90' | '365';
+type Period = '30' | '90' | '365' | 'custom';
 
 interface ToastState {
   message: string;
@@ -45,6 +46,8 @@ export default function ExpenseReportPage() {
   const navigate = useNavigate();
   const { data: expenses, loading, error, refresh } = useExpenseReport();
   const [period, setPeriod] = useState<Period>('30');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [category, setCategory] = useState('All categories');
   const [search, setSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -69,16 +72,27 @@ export default function ExpenseReportPage() {
   };
 
   const periodExpenses = useMemo(() => {
-    const days = Number(period);
-    const threshold = new Date();
-    threshold.setHours(0, 0, 0, 0);
-    threshold.setDate(threshold.getDate() - days);
-
     return expenses.filter((expense) => {
       const date = new Date(expense.expenseDate);
-      return !Number.isNaN(date.getTime()) && date >= threshold;
+      if (Number.isNaN(date.getTime())) return false;
+      if (startDate) {
+        const s = new Date(startDate);
+        if (date < s) return false;
+      }
+      if (endDate) {
+        const e = new Date(`${endDate}T23:59:59.999`);
+        if (date > e) return false;
+      }
+      if (!startDate && !endDate) {
+        const days = Number(period) || 30;
+        const threshold = new Date();
+        threshold.setHours(0, 0, 0, 0);
+        threshold.setDate(threshold.getDate() - days);
+        return date >= threshold;
+      }
+      return true;
     });
-  }, [expenses, period]);
+  }, [expenses, period, startDate, endDate]);
 
   const categories = useMemo(() => {
     return Array.from(
@@ -265,27 +279,24 @@ export default function ExpenseReportPage() {
               <Calendar size={16} className="text-slate-400" />
               Reporting period
             </span>
-            {[
-              { value: '30' as Period, label: '30 days' },
-              { value: '90' as Period, label: '90 days' },
-              { value: '365' as Period, label: '12 months' },
-            ].map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  setPeriod(option.value);
-                  setCategory('All categories');
-                }}
-                className={`min-h-[40px] rounded-lg px-3 text-sm font-semibold transition ${
-                  period === option.value
-                    ? 'bg-rose-50 text-rose-700'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+            <div className='flex justify-end align-items-end'>
+  <DateRangeFilter
+              startDate={startDate}
+              endDate={endDate}
+              onChange={(start, end) => {
+                setStartDate(start);
+                setEndDate(end);
+                if (start || end) {
+                  setPeriod('custom');
+                } else {
+                  setPeriod('30');
+                }
+              }}
+              align="right"
+              placeholder="Select Date Range"
+            />
+            </div>
+          
           </div>
 
           <div className="w-full md:w-64">

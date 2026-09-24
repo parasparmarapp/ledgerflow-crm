@@ -1,6 +1,6 @@
 import type { StockMovement } from '../types';
 import React, { useMemo, useState } from 'react';
-import { useStockMovements } from '../hooks';
+import { useStockMovements, useInventoryItems } from '../hooks';
 import { useNavigate } from 'react-router-dom';
 import { Select, DateRangeFilter, TablePagination } from '../components';
 import { AlertCircle, ArrowLeft, Calendar, CheckCircle2, ChevronRight, Download, Filter, RefreshCw, Search, X, XCircle, Activity as ActivityIcon, Package as PackageIcon } from 'lucide-react';
@@ -66,6 +66,39 @@ function escapeCsv(value: string): string {
 export default function StockHistoryPage() {
   const navigate = useNavigate();
   const { data, loading, error, refresh } = useStockMovements();
+  const { data: inventoryItems = [] } = useInventoryItems();
+
+  const getProductName = (movement?: StockMovement | null): string => {
+    if (!movement) return '—';
+    if (movement.productName) return movement.productName;
+    if (movement.item?.product?.name) return movement.item.product.name;
+    const foundItem = inventoryItems.find((inv) => inv.id === movement.inventoryItemId);
+    if (foundItem) {
+      if ((foundItem as any).productName) return (foundItem as any).productName;
+      if ((foundItem as any).product?.name) return (foundItem as any).product.name;
+    }
+    return `Inventory Item #${movement.inventoryItemId}`;
+  };
+
+  const getProductSku = (movement?: StockMovement | null): string => {
+    if (!movement) return '';
+    if (movement.sku && movement.sku !== '—') return movement.sku;
+    if (movement.item?.product?.sku) return movement.item.product.sku;
+    const foundItem = inventoryItems.find((inv) => inv.id === movement.inventoryItemId);
+    if (foundItem) {
+      if ((foundItem as any).sku && (foundItem as any).sku !== '—') return (foundItem as any).sku;
+      if ((foundItem as any).product?.sku) return (foundItem as any).product.sku;
+    }
+    return '';
+  };
+
+  const getUserName = (movement?: StockMovement | null): string => {
+    if (!movement) return '—';
+    if (movement.userName) return movement.userName;
+    if (movement.user?.name) return movement.user.name;
+    if (!movement.userId) return 'System';
+    return `User ${movement.userId}`;
+  };
 
   const movements = useMemo<StockMovement[]>(
     () => (Array.isArray(data) ? data : []),
@@ -110,6 +143,9 @@ export default function StockHistoryPage() {
         const searchable = [
           movement?.id,
           movement?.inventoryItemId,
+          getProductName(movement),
+          getProductSku(movement),
+          getUserName(movement),
           movement?.userId,
           movement?.reason,
           movement?.notes,
@@ -179,8 +215,10 @@ export default function StockHistoryPage() {
   const handleExport = () => {
     const headers = [
       'Movement ID',
+      'Product Name',
+      'SKU',
       'Inventory Item ID',
-      'User ID',
+      'Recorded By',
       'Quantity Change',
       'Reason',
       'Notes',
@@ -188,9 +226,11 @@ export default function StockHistoryPage() {
     ];
 
     const rows = filteredMovements.map((movement) => [
-      String(movement?.id ?? ''),
+      `MOV-${String(movement?.id ?? 0).padStart(5, '0')}`,
+      getProductName(movement),
+      getProductSku(movement),
       String(movement?.inventoryItemId ?? ''),
-      String(movement?.userId ?? ''),
+      getUserName(movement),
       String(movement?.quantityChange ?? ''),
       String(movement?.reason ?? ''),
       String(movement?.notes ?? ''),
@@ -380,7 +420,7 @@ export default function StockHistoryPage() {
                       Movement
                     </th>
                     <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                      Inventory item
+                      Product / Item
                     </th>
                     <th className="px-5 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">
                       Change
@@ -420,15 +460,20 @@ export default function StockHistoryPage() {
                         </td>
                         <td className="whitespace-nowrap px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-500">
-                              #{movement?.inventoryItemId ?? 0}
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+                              <PackageIcon className="h-4 w-4 text-slate-500" />
                             </div>
-                            <div>
-                              <div className="text-sm font-semibold text-slate-800">
-                                Inventory item
+                            <div className="min-w-0 max-w-[240px]">
+                              <div className="text-sm font-semibold text-slate-900 truncate" title={getProductName(movement)}>
+                                {getProductName(movement)}
                               </div>
-                              <div className="text-xs text-slate-500">
-                                ID {movement?.inventoryItemId ?? 0}
+                              <div className="text-xs text-slate-500 font-mono flex items-center gap-1.5 mt-0.5">
+                                {getProductSku(movement) && (
+                                  <span className="rounded bg-slate-100 px-1 py-0.2 font-medium text-slate-600">
+                                    {getProductSku(movement)}
+                                  </span>
+                                )}
+                                <span>ID #{movement?.inventoryItemId ?? 0}</span>
                               </div>
                             </div>
                           </div>
@@ -447,10 +492,10 @@ export default function StockHistoryPage() {
                         <td className="whitespace-nowrap px-5 py-4">
                           <div className="flex items-center gap-2">
                             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-[10px] font-bold text-rose-700">
-                              {getInitials(`User ${movement?.userId ?? 0}`)}
+                              {getInitials(getUserName(movement))}
                             </div>
-                            <span className="text-sm text-slate-600">
-                              User {movement?.userId ?? 0}
+                            <span className="text-sm font-medium text-slate-700">
+                              {getUserName(movement)}
                             </span>
                           </div>
                         </td>
@@ -522,12 +567,16 @@ export default function StockHistoryPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <DetailItem label="Inventory item" value={`#${selectedMovement?.inventoryItemId ?? 0}`} />
-              <DetailItem label="Recorded by" value={`User ${selectedMovement?.userId ?? 0}`} />
+              <DetailItem label="Product name" value={getProductName(selectedMovement)} wide valueClassName="text-slate-900 font-bold" />
+              <DetailItem
+                label="Inventory item / SKU"
+                value={`Item #${selectedMovement?.inventoryItemId ?? 0}${getProductSku(selectedMovement) ? ` • SKU: ${getProductSku(selectedMovement)}` : ''}`}
+              />
+              <DetailItem label="Recorded by" value={getUserName(selectedMovement)} />
               <DetailItem
                 label="Quantity change"
                 value={`${Number(selectedMovement?.quantityChange || 0) > 0 ? '+' : ''}${Number(selectedMovement?.quantityChange || 0)}`}
-                valueClassName={Number(selectedMovement?.quantityChange || 0) >= 0 ? 'text-emerald-700' : 'text-rose-700'}
+                valueClassName={Number(selectedMovement?.quantityChange || 0) >= 0 ? 'text-emerald-700 font-bold font-mono' : 'text-rose-700 font-bold font-mono'}
               />
               <DetailItem label="Reason" value={getReasonLabel(selectedMovement?.reason)} />
               <DetailItem label="Created" value={formatDate(selectedMovement?.createdAt)} wide />
