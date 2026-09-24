@@ -16,7 +16,7 @@ module.exports = {
       name: 'crm-frontend',
       cwd: './web',
       script: 'node_modules/.bin/vite',
-      args: 'preview --port 5173 --host 0.0.0.0',
+      args: 'preview --port 9173 --host 0.0.0.0',
       instances: 1,
       script_mode: 'fork',
       autorestart: true,
