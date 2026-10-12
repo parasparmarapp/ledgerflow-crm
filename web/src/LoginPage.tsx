@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Select } from './components';
 import { 
   ArrowRight, 
   Lock, 
@@ -338,18 +339,15 @@ export default function LoginPage() {
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Company Workspace *</label>
-                  <select
+                  <Select
                     value={forgotCompanySlug}
-                    onChange={(e) => setForgotCompanySlug(e.target.value)}
-                    required
-                    className="w-full rounded-xl border border-slate-300 p-2.5 bg-slate-50 text-slate-900 text-xs focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 focus:bg-white"
-                  >
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.slug}>
-                        {c.name} ({c.slug})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setForgotCompanySlug(String(val || ''))}
+                    placeholder="Select company workspace..."
+                    options={companies.map((c) => ({
+                      value: c.slug,
+                      label: `${c.name} (${c.slug})`,
+                    }))}
+                  />
                 </div>
 
                 <div>

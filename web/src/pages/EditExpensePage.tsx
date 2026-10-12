@@ -1,16 +1,17 @@
 import type { Expense } from '../types';
 import { useEffect, useMemo, useState, ChangeEvent, FormEvent } from 'react';
-import { useExpenses } from '../hooks';
+import { useExpenses, useExpenseCategories } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Select, DatePicker } from '../components';
-import { ArrowLeft, Calendar, CheckCircle2, CircleDollarSign, FileText, RefreshCw, Save, X, XCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, CheckCircle2, CircleDollarSign, FileText, RefreshCw, Save, X, XCircle, ListChecks } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
 
 type ExpenseForm = {
   description: string;
   category: string;
+  item: string;
   amount: number;
   expenseDate: string;
   vendor: string;
@@ -31,6 +32,7 @@ function getExpenseForm(expense: Expense | undefined): ExpenseForm {
   return {
     description: expense?.description || '',
     category: expense?.category || '',
+    item: expense?.item || '',
     amount: Number(expense?.amount) || 0,
     expenseDate: toDateInputValue(expense?.expenseDate),
     vendor: expense?.vendor || '',
@@ -51,6 +53,7 @@ export default function EditExpensePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { data, loading, error, refresh, update } = useExpenses();
+  const { categories } = useExpenseCategories();
 
   const expenses = Array.isArray(data) ? data : [];
   const requestedId = Number(searchParams.get('id') || 0);
@@ -62,6 +65,27 @@ export default function EditExpensePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+
+  const selectedCategory = useMemo(() => {
+    return categories.find((c) => c.name === form.category);
+  }, [categories, form.category]);
+
+  const availableItems = selectedCategory?.items || [];
+
+  const categoryOptions = useMemo(() => {
+    return categories.map((cat) => ({
+      value: cat.name,
+      label: cat.name,
+      group: cat.group || 'General Expenses',
+    }));
+  }, [categories]);
+
+  const itemOptions = useMemo(() => {
+    return availableItems.map((item) => ({
+      value: item.name,
+      label: item.name,
+    }));
+  }, [availableItems]);
 
   const selectedExpense = useMemo(
     () =>
@@ -93,7 +117,7 @@ export default function EditExpensePage() {
     const errors: Record<string, string> = {};
 
     if (!form.description.trim()) errors.description = 'Enter a description.';
-    if (!form.category.trim()) errors.category = 'Enter a category.';
+    if (!form.category.trim()) errors.category = 'Select a category.';
     if (form.amount <= 0) errors.amount = 'Amount must be greater than zero.';
     if (!form.expenseDate) errors.expenseDate = 'Select an expense date.';
 
@@ -115,6 +139,7 @@ export default function EditExpensePage() {
       await update(selectedExpense.id, {
         description: form.description.trim(),
         category: form.category.trim(),
+        item: form.item.trim() || undefined,
         amount: Number(form.amount) || 0,
         expenseDate: form.expenseDate,
         vendor: form.vendor.trim() || undefined,
@@ -122,6 +147,9 @@ export default function EditExpensePage() {
       });
       setShowConfirm(false);
       showToast('Expense updated successfully.');
+      setTimeout(() => {
+        navigate('/expense-list');
+      }, 500);
     } catch {
       showToast('Failed to update expense.', 'error');
     } finally {
@@ -305,15 +333,45 @@ export default function EditExpensePage() {
 
             <div>
               <FieldLabel required>Category</FieldLabel>
-              <input
+              <Select
+                id="edit-category"
                 value={form.category}
-                onChange={(event) => updateField('category', event.target.value)}
-                placeholder="e.g. Operations"
-                className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                onChange={(val) => {
+                  const strVal = String(val || '');
+                  setForm((current) => ({ ...current, category: strVal, item: '' }));
+                  setFieldErrors((current) => ({ ...current, category: '' }));
+                }}
+                placeholder="Select a category..."
+                options={categoryOptions}
+                error={fieldErrors.category}
+                searchable
               />
-              {fieldErrors.category ? (
-                <p className="mt-2 text-sm text-rose-600">{fieldErrors.category}</p>
-              ) : null}
+            </div>
+
+            <div>
+              <FieldLabel>Expense Item</FieldLabel>
+              <Select
+                id="edit-item"
+                value={form.item}
+                onChange={(val) => {
+                  const selectedItem = String(val || '');
+                  updateField('item', selectedItem);
+                  if (!form.description && selectedItem) {
+                    updateField('description', selectedItem);
+                  }
+                }}
+                disabled={!form.category || availableItems.length === 0}
+                placeholder={
+                  !form.category
+                    ? 'Select category first'
+                    : availableItems.length === 0
+                    ? 'No predefined items'
+                    : 'Select expense item (optional)'
+                }
+                options={itemOptions}
+                searchable={itemOptions.length > 5}
+                clearable
+              />
             </div>
 
             <div>

@@ -1,4 +1,4 @@
-import type { Expense, CreateExpenseInput, UpdateExpenseInput } from '../types';
+import type { Expense, CreateExpenseInput, UpdateExpenseInput, ExpenseCategory, ExpenseCategoryItem } from '../types';
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../lib/api';
 
@@ -82,6 +82,27 @@ export function useExpenses() {
     }
   };
 
+  const fetchCategories = useCallback(async (): Promise<ExpenseCategory[]> => {
+    try {
+      const res = await api.get<ExpenseCategory[]>(`${PATH}/categories`);
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const fetchItems = useCallback(async (category?: string, categoryId?: number): Promise<ExpenseCategoryItem[]> => {
+    try {
+      const params: Record<string, any> = {};
+      if (categoryId) params.categoryId = categoryId;
+      else if (category) params.category = category;
+      const res = await api.get<ExpenseCategoryItem[]>(`${PATH}/items`, { params });
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   return {
     data,
     expenses: data,
@@ -97,7 +118,50 @@ export function useExpenses() {
     remove,
     deleteExpense: remove,
     removeExpense: remove,
+    fetchCategories,
+    fetchItems,
   };
+}
+
+export function useExpenseCategories() {
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCategories = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<ExpenseCategory[]>(`${PATH}/categories`);
+      const cats = Array.isArray(data) ? data : [];
+      setCategories(cats);
+      return cats;
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to fetch expense categories';
+      setError(msg);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchItems = useCallback(async (category?: string, categoryId?: number) => {
+    try {
+      const params: Record<string, any> = {};
+      if (categoryId) params.categoryId = categoryId;
+      else if (category && category !== 'All' && category !== 'All categories') params.category = category;
+      const data = await api.get<ExpenseCategoryItem[]>(`${PATH}/items`, { params });
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  return { categories, loading, error, refresh: fetchCategories, fetchCategories, fetchItems };
 }
 
 export const useExpense = useExpenses;

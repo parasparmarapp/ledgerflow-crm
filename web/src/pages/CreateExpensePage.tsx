@@ -1,10 +1,10 @@
 import type { Expense } from '../types';
-import React, { useState, FormEvent, ChangeEvent } from 'react';
-import { useExpenses } from '../hooks';
+import React, { useState, useMemo, FormEvent, ChangeEvent } from 'react';
+import { useExpenses, useExpenseCategories } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { useNavigate } from 'react-router-dom';
-import { DatePicker } from '../components';
-import { ArrowLeft, Calendar, CheckCircle2, DollarSign, FileText, XCircle, AlertCircle, RefreshCw, Tag as TagIcon } from 'lucide-react';
+import { DatePicker, Select } from '../components';
+import { ArrowLeft, Calendar, CheckCircle2, DollarSign, FileText, XCircle, AlertCircle, RefreshCw, Tag as TagIcon, ListChecks } from 'lucide-react';
 
 type ToastState = {
   message: string;
@@ -14,6 +14,7 @@ type ToastState = {
 type ExpenseForm = {
   description: string;
   category: string;
+  item: string;
   amount: string;
   expenseDate: string;
   vendor: string;
@@ -60,12 +61,14 @@ function Toast({ toast }: { toast: ToastState }) {
 export default function CreateExpensePage() {
   const navigate = useNavigate();
   const { data, loading, error, create, refresh } = useExpenses();
+  const { categories, loading: loadingCategories } = useExpenseCategories();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [form, setForm] = useState<ExpenseForm>({
     description: '',
     category: '',
+    item: '',
     amount: '',
     expenseDate: new Date().toISOString().slice(0, 10),
     vendor: '',
@@ -73,6 +76,27 @@ export default function CreateExpensePage() {
   });
 
   const recentExpenses: Expense[] = Array.isArray(data) ? data.slice(0, 3) : [];
+
+  const selectedCategory = useMemo(() => {
+    return categories.find((c) => c.name === form.category);
+  }, [categories, form.category]);
+
+  const availableItems = selectedCategory?.items || [];
+
+  const categoryOptions = useMemo(() => {
+    return categories.map((cat) => ({
+      value: cat.name,
+      label: cat.name,
+      group: cat.group || 'General Expenses',
+    }));
+  }, [categories]);
+
+  const itemOptions = useMemo(() => {
+    return availableItems.map((item) => ({
+      value: item.name,
+      label: item.name,
+    }));
+  }, [availableItems]);
 
   const showToast = (message: string, type: ToastState extends null ? never : 'success' | 'error' | 'info' = 'success') => {
     setToast({ message, type });
@@ -87,7 +111,7 @@ export default function CreateExpensePage() {
   const validate = (): FieldErrors => {
     const nextErrors: FieldErrors = {};
     if (!form.description.trim()) nextErrors.description = 'Enter a description.';
-    if (!form.category.trim()) nextErrors.category = 'Enter a category.';
+    if (!form.category.trim()) nextErrors.category = 'Select a category.';
     if (!form.amount || Number(form.amount) <= 0) nextErrors.amount = 'Enter an amount greater than zero.';
     if (!form.expenseDate) nextErrors.expenseDate = 'Select an expense date.';
     return nextErrors;
@@ -109,21 +133,16 @@ export default function CreateExpensePage() {
       await create({
         description: form.description.trim(),
         category: form.category.trim(),
+        ...(form.item.trim() ? { item: form.item.trim() } : {}),
         amount: Number(form.amount) || 0,
         expenseDate: form.expenseDate,
         ...(form.vendor.trim() ? { vendor: form.vendor.trim() } : {}),
         ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
       });
       showToast('Expense created successfully!');
-      setForm({
-        description: '',
-        category: '',
-        amount: '',
-        expenseDate: new Date().toISOString().slice(0, 10),
-        vendor: '',
-        notes: '',
-      });
-      setErrors({});
+      setTimeout(() => {
+        navigate('/expense-list');
+      }, 500);
     } catch {
       showToast('Failed to create expense.', 'error');
     } finally {
@@ -220,16 +239,47 @@ export default function CreateExpensePage() {
                 <FieldLabel htmlFor="category" icon={<TagIcon size={16} />} required>
                   Category
                 </FieldLabel>
-                <input
+                <Select
                   id="category"
-                  type="text"
                   value={form.category}
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => updateField('category', event.target.value)}
-                  placeholder="e.g. Software"
-                  className={inputClass('category')}
-                  aria-invalid={Boolean(errors.category)}
+                  onChange={(val) => {
+                    const strVal = String(val || '');
+                    setForm((cur) => ({ ...cur, category: strVal, item: '' }));
+                    setErrors((cur) => ({ ...cur, category: undefined }));
+                  }}
+                  placeholder="Select a category..."
+                  options={categoryOptions}
+                  error={errors.category}
+                  searchable
                 />
-                {errors.category ? <p className="mt-2 text-xs text-red-600">{errors.category}</p> : null}
+              </div>
+
+              <div>
+                <FieldLabel htmlFor="item" icon={<ListChecks size={16} />}>
+                  Expense Item
+                </FieldLabel>
+                <Select
+                  id="item"
+                  value={form.item}
+                  onChange={(val) => {
+                    const selectedItem = String(val || '');
+                    updateField('item', selectedItem);
+                    if (!form.description && selectedItem) {
+                      updateField('description', selectedItem);
+                    }
+                  }}
+                  disabled={!form.category || availableItems.length === 0}
+                  placeholder={
+                    !form.category
+                      ? 'Select category first'
+                      : availableItems.length === 0
+                      ? 'No predefined items'
+                      : 'Select expense item (optional)'
+                  }
+                  options={itemOptions}
+                  searchable={itemOptions.length > 5}
+                  clearable
+                />
               </div>
 
               <div>
@@ -297,7 +347,7 @@ export default function CreateExpensePage() {
             <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/expense-list')}
                 className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Cancel

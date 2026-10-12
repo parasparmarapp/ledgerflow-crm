@@ -404,10 +404,31 @@ export type UpdateRecurringInvoiceDTO = UpdateRecurringInvoiceInput;
 export type RecurringInvoiceView = RecurringInvoice;
 export type RecurringInvoiceResponse = RecurringInvoice;
 
+export interface ExpenseCategoryItem {
+  id: number;
+  categoryId: number;
+  name: string;
+  sortOrder?: number;
+  category?: {
+    id: number;
+    name: string;
+    group?: string | null;
+  };
+}
+
+export interface ExpenseCategory {
+  id: number;
+  name: string;
+  group?: string | null;
+  sortOrder?: number;
+  items?: ExpenseCategoryItem[];
+}
+
 export interface Expense {
   id: number;
   description: string;
   category: string;
+  item?: string | null;
   amount: number;
   expenseDate: string;
   vendor?: string;
@@ -420,6 +441,7 @@ export interface Expense {
 export interface CreateExpenseInput {
   description: string;
   category: string;
+  item?: string;
   amount: number;
   expenseDate: string;
   vendor?: string;
@@ -433,6 +455,7 @@ export interface UpdateExpenseInput {
   id?: number;
   description?: string;
   category?: string;
+  item?: string;
   amount?: number;
   expenseDate?: string;
   vendor?: string;

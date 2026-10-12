@@ -6,6 +6,7 @@ export interface SelectOption {
   label: string;
   icon?: React.ReactNode;
   sublabel?: string;
+  group?: string;
   disabled?: boolean;
 }
 
@@ -15,9 +16,11 @@ export interface SelectProps {
   onChange: (value: any) => void;
   placeholder?: string;
   label?: string;
+  icon?: React.ReactNode;
   error?: string;
   disabled?: boolean;
   searchable?: boolean;
+  clearable?: boolean;
   className?: string;
   id?: string;
   name?: string;
@@ -30,9 +33,11 @@ export function Select({
   onChange,
   placeholder = 'Select an option...',
   label,
+  icon,
   error,
   disabled = false,
   searchable,
+  clearable = false,
   className = '',
   id,
   name,
@@ -60,7 +65,8 @@ export function Select({
     return options.filter(
       (opt) =>
         opt.label.toLowerCase().includes(query) ||
-        (opt.sublabel && opt.sublabel.toLowerCase().includes(query))
+        (opt.sublabel && opt.sublabel.toLowerCase().includes(query)) ||
+        (opt.group && opt.group.toLowerCase().includes(query))
     );
   }, [options, searchQuery]);
 
@@ -140,16 +146,22 @@ export function Select({
     setSearchQuery('');
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange('');
+    setSearchQuery('');
+  };
+
   return (
     <div className={`relative ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
       {label && (
         <label
           htmlFor={id}
-          className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between"
+          className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2"
         >
-          <span>
-            {label} {required && <span className="text-red-500">*</span>}
-          </span>
+          {icon && <span className="text-slate-400">{icon}</span>}
+          <span>{label}</span>
+          {required && <span className="text-rose-500">*</span>}
         </label>
       )}
 
@@ -164,25 +176,28 @@ export function Select({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl border text-left flex items-center justify-between gap-2 transition-all cursor-pointer select-none text-xs font-medium ${
+        className={`w-full min-h-[44px] px-3.5 py-2.5 rounded-xl border text-left flex items-center justify-between gap-2.5 transition outline-none cursor-pointer select-none text-sm font-medium ${
           disabled
-            ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+            ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed opacity-75'
             : isOpen
-            ? 'bg-white border-amber-500 ring-2 ring-amber-500/20 shadow-xs text-slate-900'
+            ? 'bg-white border-amber-400 ring-4 ring-amber-100 shadow-sm text-slate-900'
             : error
-            ? 'bg-red-50/50 border-red-300 text-slate-900 hover:border-red-400'
-            : 'bg-white border-slate-300 hover:border-slate-400 text-slate-900 hover:bg-slate-50/50 shadow-2xs'
+            ? 'bg-red-50/30 border-red-300 text-slate-900 hover:border-red-400'
+            : 'bg-white border-slate-200 hover:border-slate-300 text-slate-900 focus:border-amber-400 focus:ring-4 focus:ring-amber-100'
         }`}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {selectedOption?.icon && (
-            <span className="shrink-0 text-slate-500">{selectedOption.icon}</span>
-          )}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {selectedOption?.icon ? (
+            <span className="shrink-0 text-slate-400">{selectedOption.icon}</span>
+          ) : icon && !label ? (
+            <span className="shrink-0 text-slate-400">{icon}</span>
+          ) : null}
+
           {selectedOption ? (
-            <div className="min-w-0 truncate">
-              <span className="font-semibold text-slate-900">{selectedOption.label}</span>
+            <div className="min-w-0 truncate flex items-center gap-2">
+              <span className="font-semibold text-slate-900 truncate">{selectedOption.label}</span>
               {selectedOption.sublabel && (
-                <span className="text-[11px] text-slate-400 ml-1.5 font-normal">
+                <span className="text-xs text-slate-400 shrink-0 font-normal">
                   {selectedOption.sublabel}
                 </span>
               )}
@@ -192,21 +207,37 @@ export function Select({
           )}
         </div>
 
-        <ChevronDown
-          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-amber-600' : ''
-          }`}
-        />
+        <div className="flex items-center gap-1 shrink-0">
+          {clearable && selectedOption && !disabled && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleClear}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') handleClear(e as any);
+              }}
+              title="Clear selection"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <ChevronDown
+            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+              isOpen ? 'rotate-180 text-amber-600' : ''
+            }`}
+          />
+        </div>
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-xl shadow-slate-900/10 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
           {/* Search Box if Searchable */}
           {isSearchable && (
-            <div className="p-2 border-b border-slate-100 bg-slate-50/70">
+            <div className="p-2 border-b border-slate-100 bg-slate-50/80">
               <div className="relative flex items-center">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none" />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -216,15 +247,15 @@ export function Select({
                     setHighlightedIndex(0);
                   }}
                   placeholder="Type to filter..."
-                  className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-medium"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 font-medium transition"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2 text-slate-400 hover:text-slate-600 p-0.5"
+                    className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
@@ -236,62 +267,77 @@ export function Select({
             ref={listRef}
             role="listbox"
             tabIndex={-1}
-            className="max-h-60 overflow-y-auto py-1.5 px-1 space-y-0.5 text-xs focus:outline-hidden"
+            className="max-h-64 overflow-y-auto p-1.5 space-y-0.5 text-sm focus:outline-none"
           >
             {filteredOptions.length === 0 ? (
-              <li className="px-3 py-3 text-center text-slate-400 text-xs italic">
+              <li className="px-3 py-4 text-center text-slate-400 text-xs italic">
                 No matching options found
               </li>
             ) : (
-              filteredOptions.map((opt, index) => {
-                const isSelected = String(opt.value) === String(value);
-                const isHighlighted = highlightedIndex === index;
+              (() => {
+                let lastGroup: string | undefined = undefined;
 
-                return (
-                  <li
-                    key={String(opt.value) + index}
-                    role="option"
-                    aria-selected={isSelected}
-                    onClick={() => {
-                      if (!opt.disabled) handleSelect(opt.value);
-                    }}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition select-none ${
-                      opt.disabled
-                        ? 'opacity-40 cursor-not-allowed bg-transparent'
-                        : isSelected
-                        ? 'bg-amber-50 text-amber-900 font-semibold'
-                        : isHighlighted
-                        ? 'bg-slate-100 text-slate-900'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {opt.icon && <span className="shrink-0 text-slate-500">{opt.icon}</span>}
-                      <div className="min-w-0 truncate">
-                        <span className={isSelected ? 'font-semibold text-amber-900' : 'font-medium'}>
-                          {opt.label}
-                        </span>
-                        {opt.sublabel && (
-                          <span className="text-[10px] text-slate-400 block truncate font-normal">
-                            {opt.sublabel}
-                          </span>
+                return filteredOptions.map((opt, index) => {
+                  const isSelected = String(opt.value) === String(value);
+                  const isHighlighted = highlightedIndex === index;
+                  const showGroupHeader = opt.group && opt.group !== lastGroup;
+                  if (opt.group) lastGroup = opt.group;
+
+                  return (
+                    <React.Fragment key={String(opt.value) + '-' + index}>
+                      {showGroupHeader && (
+                        <li
+                          className="px-3 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/60 rounded-md mt-1 first:mt-0 select-none"
+                          role="presentation"
+                        >
+                          {opt.group}
+                        </li>
+                      )}
+                      <li
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          if (!opt.disabled) handleSelect(opt.value);
+                        }}
+                        onMouseEnter={() => setHighlightedIndex(index)}
+                        className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition select-none ${
+                          opt.disabled
+                            ? 'opacity-40 cursor-not-allowed bg-transparent'
+                            : isSelected
+                            ? 'bg-amber-50 text-amber-900 font-semibold ring-1 ring-amber-200/50'
+                            : isHighlighted
+                            ? 'bg-slate-50 text-slate-900 font-medium'
+                            : 'text-slate-700 hover:bg-slate-50 font-normal'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {opt.icon && <span className="shrink-0 text-slate-400">{opt.icon}</span>}
+                          <div className="min-w-0 truncate">
+                            <span className={isSelected ? 'font-semibold text-amber-900' : ''}>
+                              {opt.label}
+                            </span>
+                            {opt.sublabel && (
+                              <span className="text-xs text-slate-400 block truncate font-normal mt-0.5">
+                                {opt.sublabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-amber-600 shrink-0 ml-2" />
                         )}
-                      </div>
-                    </div>
-
-                    {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-amber-600 shrink-0 ml-2" />
-                    )}
-                  </li>
-                );
-              })
+                      </li>
+                    </React.Fragment>
+                  );
+                });
+              })()
             )}
           </ul>
         </div>
       )}
 
-      {error && <p className="text-xs text-red-500 mt-1 font-medium">{error}</p>}
+      {error && <p className="text-xs text-rose-500 mt-1.5 font-medium">{error}</p>}
     </div>
   );
 }

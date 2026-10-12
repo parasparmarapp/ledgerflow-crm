@@ -1,11 +1,11 @@
 import type { Expense } from '../types';
 import { useMemo, useState } from 'react';
-import { useExpenses } from '../hooks';
+import { useExpenses, useExpenseCategories } from '../hooks';
 import { formatCurrency } from '../lib/currency';
 import { ROUTES } from '../routes';
 import { useNavigate } from 'react-router-dom';
 import { Select, DateRangeFilter, TablePagination } from '../components';
-import { AlertCircle, BarChart3, Calendar, CheckCircle2, ChevronRight, Download, Eye, FileText, Filter, Plus, RefreshCw, Search, Trash2, X, XCircle } from 'lucide-react';
+import { AlertCircle, BarChart3, Calendar, CheckCircle2, ChevronRight, Download, Eye, FileText, Filter, Plus, RefreshCw, Search, Trash2, X, XCircle, Edit } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -37,6 +37,7 @@ function getInitials(value: string): string {
 export default function ExpenseListPage() {
   const navigate = useNavigate();
   const { data, loading, error, refresh, remove } = useExpenses();
+  const { categories: catalogCategories } = useExpenseCategories();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All categories');
   const [startDate, setStartDate] = useState('');
@@ -64,11 +65,12 @@ export default function ExpenseListPage() {
   const expenses = Array.isArray(data) ? data : [];
 
   const categories = useMemo(() => {
-    const values = expenses
+    const valuesFromData = expenses
       .map((expense) => String(expense?.category || '').trim())
       .filter(Boolean);
-    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
-  }, [expenses]);
+    const catalogValues = catalogCategories.map((c) => c.name);
+    return Array.from(new Set([...catalogValues, ...valuesFromData])).sort((a, b) => a.localeCompare(b));
+  }, [expenses, catalogCategories]);
 
   const filteredExpenses = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -76,11 +78,13 @@ export default function ExpenseListPage() {
     return expenses.filter((expense) => {
       const description = String(expense?.description || '').toLowerCase();
       const category = String(expense?.category || '').toLowerCase();
+      const item = String(expense?.item || '').toLowerCase();
       const vendor = String(expense?.vendor || '').toLowerCase();
       const matchesSearch =
         !query ||
         description.includes(query) ||
         category.includes(query) ||
+        item.includes(query) ||
         vendor.includes(query) ||
         String(expense?.id || '').includes(query);
 
@@ -454,6 +458,11 @@ export default function ExpenseListPage() {
                           <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
                             {expense.category || 'Uncategorized'}
                           </span>
+                          {expense.item ? (
+                            <p className="mt-1 max-w-[220px] truncate text-xs font-medium text-slate-500">
+                              {expense.item}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="whitespace-nowrap px-6 py-4 text-sm text-slate-600">
                           {expense.vendor || '—'}
@@ -544,6 +553,12 @@ export default function ExpenseListPage() {
                 </p>
               </div>
               <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Expense Item</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {selectedExpense.item || 'Not specified'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Vendor</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900">
                   {selectedExpense.vendor || 'Not provided'}
@@ -560,7 +575,15 @@ export default function ExpenseListPage() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(`${ROUTES.EDIT_EXPENSE}?id=${selectedExpense.id}`)}
+                className="inline-flex min-h-[40px] items-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedExpense(null)}
