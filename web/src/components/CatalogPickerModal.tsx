@@ -1,16 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { ProductService } from '../types';
 import { formatCurrency } from '../lib/currency';
-import { 
-  X, 
-  Search, 
-  Package, 
-  Wrench, 
-  Check, 
-  Plus, 
-  Boxes, 
-  Building2, 
-  Tag, 
+import {
+  X,
+  Search,
+  Package,
+  Wrench,
+  Check,
+  Plus,
+  Boxes,
+  Building2,
+  Tag,
   ArrowRight,
   Sparkles
 } from 'lucide-react';
