@@ -17,8 +17,6 @@ interface AuthContextType {
   login: (token: string, user: UserAccount) => void;
   logout: () => void;
   updateUser: (updatedFields: Partial<UserAccount>) => void;
-  switchRoleQuick: (role: 'admin' | 'staff') => Promise<void>;
-  isRoleSwitching: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -28,8 +26,6 @@ const AuthContext = createContext<AuthContextType>({
   login: () => {},
   logout: () => {},
   updateUser: () => {},
-  switchRoleQuick: async () => {},
-  isRoleSwitching: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -51,8 +47,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return null;
     }
   });
-
-  const [isRoleSwitching, setIsRoleSwitching] = useState(false);
 
   const login = useCallback((newToken: string, newUser: UserAccount) => {
     try {
@@ -89,38 +83,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     notifySessionChanged();
   }, []);
 
-  // Quick switch between Admin and Staff for testing different panels and roles
-  const switchRoleQuick = useCallback(async (targetRole: 'admin' | 'staff') => {
-    setIsRoleSwitching(true);
-    try {
-      const activeSlug = user?.companySlug || 'brand-it';
-      const domain = activeSlug === 'stoic' ? 'stoic.com' : 'brand-it.com';
-      const email = targetRole === 'admin' 
-        ? `admin@${domain}` 
-        : `staff@${domain}`;
-      const password = targetRole === 'admin' ? 'Admin!2026' : 'Staff!2026';
-
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, companySlug: activeSlug }),
-      });
-
-      if (!res.ok) {
-        throw new Error('Quick role switch failed');
-      }
-
-      const data = await res.json();
-      if (data?.token && data?.user) {
-        login(data.token, data.user);
-      }
-    } catch (err) {
-      console.error('[AuthContext] Error switching role:', err);
-    } finally {
-      setIsRoleSwitching(false);
-    }
-  }, [login, user?.companySlug]);
-
   useEffect(() => {
     const handleSessionChange = () => {
       try {
@@ -149,8 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         updateUser,
-        switchRoleQuick,
-        isRoleSwitching,
       }}
     >
       {children}

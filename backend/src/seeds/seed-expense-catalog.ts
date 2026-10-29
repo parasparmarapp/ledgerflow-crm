@@ -229,10 +229,11 @@ if (require.main === module) {
   seedExpenseCatalog()
     .then(() => {
       console.log('Expense catalog seed complete.');
-      process.exit(0);
+      process.exitCode = 0;
     })
     .catch((err) => {
       console.error('Failed to seed expense catalog:', err);
-      process.exit(1);
-    });
+      process.exitCode = 1;
+    })
+    .finally(() => prismaRoot.$disconnect());
 }

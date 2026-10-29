@@ -167,7 +167,7 @@ usersRouter.post(
     const schema = z.object({ password: z.string().min(8) });
     const { password } = parseBody(schema, req);
     const id = idParam(req);
-    await prisma.user.update({ where: { id }, data: { passwordHash: hashPassword(password) } });
+    await prisma.user.update({ where: { id }, data: { passwordHash: hashPassword(password), sessionVersion: { increment: 1 } } });
     invalidateUserCache(id);
     await audit({ action: 'user.reset_password', entityType: 'user', entityId: id, ...actorFrom(req) });
     res.json({ success: true });

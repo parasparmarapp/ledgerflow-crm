@@ -3,6 +3,7 @@ import { verifyToken, loginAccount, registerAccount, currentAccount, updateCurre
 import prisma from '../../lib/prisma';
 import { requireAuth } from '../../auth/permissions';
 import { requestPasswordReset, resetPassword } from '../../auth/password-reset';
+import { ah } from '../../lib/http';
 import { z } from 'zod';
 
 const router = Router();
@@ -29,11 +30,27 @@ function reply(res: Response, outcome: AuthOutcome) {
   res.status(outcome.status).json(outcome.body);
 }
 
-router.get('/companies', async (_req, res) => {
+router.get('/companies', ah(async (_req, res) => {
   const companies = await prisma.company.findMany({ where: { isActive: true }, select: { id: true, slug: true, name: true }, orderBy: { name: 'asc' } });
   res.json(companies);
-});
-router.post('/login', async (req, res) => reply(res, await loginAccount(req.body)));
+}));
+// Only failed sign-ins count, so a shared office IP is not locked out by normal logins.
+const MAX_FAILED_LOGINS = 10;
+router.post('/login', ah(async (req, res) => {
+  const now = Date.now();
+  const key = `login:${req.ip}`;
+  const bucket = rateBuckets.get(key);
+  if (bucket && bucket.resetAt > now && bucket.count >= MAX_FAILED_LOGINS) {
+    return res.status(429).json({ error: 'Too many failed sign-in attempts. Please try again later.', code: 'RATE_LIMITED' });
+  }
+  const outcome = await loginAccount(req.body);
+  if (outcome.status === 401) {
+    const current = bucket && bucket.resetAt > now ? bucket : { count: 0, resetAt: now + 15 * 60_000 };
+    current.count += 1;
+    rateBuckets.set(key, current);
+  }
+  reply(res, outcome);
+}));
 router.post('/forgot-password', limitResetRequests('request'), (req, res) => {
   const parsed = resetRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Select a company and enter a valid email address.', code: 'VALIDATION_ERROR' });
@@ -52,8 +69,8 @@ router.post('/reset-password', limitResetRequests('reset'), async (req, res, nex
     next(error);
   }
 });
-router.get('/me', requireAuth, async (req, res) => reply(res, await currentAccount(verifyToken(req.headers.authorization)!)));
-router.patch('/me', requireAuth, async (req, res) => reply(res, await updateCurrentAccount(verifyToken(req.headers.authorization)!, req.body)));
-router.post('/change-password', requireAuth, async (req, res) => reply(res, await changePassword(verifyToken(req.headers.authorization)!, req.body)));
+router.get('/me', requireAuth, ah(async (req, res) => reply(res, await currentAccount(verifyToken(req.headers.authorization)!))));
+router.patch('/me', requireAuth, ah(async (req, res) => reply(res, await updateCurrentAccount(verifyToken(req.headers.authorization)!, req.body))));
+router.post('/change-password', requireAuth, ah(async (req, res) => reply(res, await changePassword(verifyToken(req.headers.authorization)!, req.body))));
 
 export default router;

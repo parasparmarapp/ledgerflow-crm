@@ -8,6 +8,7 @@
     "test": "vitest run",
     "seed": "tsx src/seed.ts",
     "db:seed": "tsx src/seed.ts",
+    "db:seed:expenses": "tsx src/seeds/seed-expense-catalog.ts",
     "db:bootstrap-companies": "tsx src/bootstrap-companies.ts",
     "db:push": "prisma db push",
     "db:generate": "prisma generate"

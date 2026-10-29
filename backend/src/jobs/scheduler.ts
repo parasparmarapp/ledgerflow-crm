@@ -9,15 +9,21 @@ import { runWithCompany } from '../lib/company-context';
 
 /**
  * Postgres advisory lock so only one process instance runs a given job at a time
- * (safe to run this scheduler on multiple app instances).
+ * (safe to run this scheduler on multiple app instances). The lock is transaction-scoped and
+ * held on one dedicated connection for the job's duration: a session lock taken through the
+ * connection pool can be unlocked on a different connection and leak, silently skipping jobs.
  */
 async function withLock(key: number, fn: () => Promise<void>) {
-  const [{ locked }] = await prisma.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_lock(${key}) AS locked`;
-  if (!locked) return;
   try {
-    await fn();
-  } finally {
-    await prisma.$queryRaw`SELECT pg_advisory_unlock(${key})`;
+    await prisma.$transaction(
+      async (tx) => {
+        const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(${key}) AS locked`;
+        if (locked) await fn();
+      },
+      { maxWait: 10_000, timeout: 30 * 60_000 },
+    );
+  } catch (err: any) {
+    console.error(`[scheduler] job ${key} failed:`, err?.message || err);
   }
 }
 

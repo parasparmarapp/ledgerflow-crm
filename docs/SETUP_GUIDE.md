@@ -55,7 +55,12 @@ This launches a dedicated PostgreSQL 16 instance (`crm-postgres`) on port `5432`
    ```bash
    npm run seed
    ```
-   > Skip this step for an existing database; the seed script replaces Brand It demo records.
+   > ⚠️ This **deletes every record in every table**. Never run it against production (it refuses when `LEGERCRM_NODE_ENV=production`).
+   >
+   > To load or refresh only the expense categories/items (from `Brand_IT_Expense_Schedule.xlsx`) on any database, including production, run the non-destructive, rerunnable:
+   > ```bash
+   > npm run db:seed:expenses
+   > ```
 4. Create the two company workspaces and bootstrap Stoic's first admin from an existing active Brand It admin:
    ```bash
    npm run db:bootstrap-companies

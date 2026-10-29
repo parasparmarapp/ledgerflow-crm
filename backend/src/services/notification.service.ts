@@ -12,7 +12,7 @@ export const MAX_ATTEMPTS = 3;
 
 function publicLink(token: string): string {
   const base = (process.env.LEGERCRM_PUBLIC_APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
-  return `${base}/i/${token}`;
+  return `${base}/api/v1/public/invoices/${token}/pdf`;
 }
 
 interface DispatchArgs {

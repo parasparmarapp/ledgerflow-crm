@@ -7,6 +7,12 @@ import { runWithCompany } from './lib/company-context';
 import { seedExpenseCatalog } from './seeds/seed-expense-catalog';
 
 async function main() {
+  // This script wipes every table. Never let it run against production by accident;
+  // use `npm run db:seed:expenses` there to (re)load the expense catalog only.
+  if (process.env.LEGERCRM_NODE_ENV === 'production' && process.env.LEGERCRM_ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error('Refusing to wipe a production database. Set LEGERCRM_ALLOW_DESTRUCTIVE_SEED=true to override.');
+  }
+
   console.log('🌱 Starting clean PostgreSQL database reset and production-ready seed...');
 
   // 1. Purge ALL database tables cleanly across all companies

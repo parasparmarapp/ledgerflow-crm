@@ -190,9 +190,13 @@ publicRouter.get(
 publicRouter.get(
   '/:token/pdf',
   ah(async (req, res) => {
-    const invoice = await prismaRoot.invoice.findUnique({ where: { publicToken: req.params.token } });
-    if (!invoice) return res.status(404).json({ error: 'Invoice not found', code: 'NOT_FOUND' });
-    await runWithCompany(invoice.companyId, () => streamInvoicePdf(res, invoice.id));
+    const found = await prismaRoot.invoice.findUnique({ where: { publicToken: req.params.token }, select: { companyId: true } });
+    if (!found) throw notFound('Invoice');
+    // Rejects drafts and voided invoices, and records the first view.
+    await runWithCompany(found.companyId, async () => {
+      const invoice = await invoiceService.markViewedByToken(req.params.token);
+      await streamInvoicePdf(res, invoice.id);
+    });
   }),
 );
 

@@ -361,7 +361,7 @@ export default function LoginPage() {
                       required
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="admin@brand-it.com"
+                      placeholder="you@company.com"
                       className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 focus:bg-white"
                     />
                   </div>

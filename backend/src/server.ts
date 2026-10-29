@@ -27,6 +27,10 @@ import './services/notification.service'; // registers domain-event listeners
 
 const app = express();
 const BASE = '/api/v1';
+const IS_PRODUCTION = process.env.LEGERCRM_NODE_ENV === 'production';
+
+// The web app proxies /api from the same host, so trust X-Forwarded-For only from loopback.
+app.set('trust proxy', 'loopback');
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
@@ -103,7 +107,8 @@ function listenOnAvailablePort(port: number, attempts = 20): void {
   });
 
   server.once('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE' && attempts > 1 && port < 65535) {
+    // In production the web proxy targets a fixed port, so never silently move to another one.
+    if (err.code === 'EADDRINUSE' && !IS_PRODUCTION && attempts > 1 && port < 65535) {
       const nextPort = port + 1;
       console.warn(`Port ${port} is already in use, trying port ${nextPort}...`);
       listenOnAvailablePort(nextPort, attempts - 1);
@@ -116,6 +121,15 @@ function listenOnAvailablePort(port: number, attempts = 20): void {
 }
 
 if (process.env.LEGERCRM_NODE_ENV !== 'test') {
+  const jwtSecret = process.env.LEGERCRM_JWT_SECRET || '';
+  if (jwtSecret.length < 32) {
+    console.error('[boot] LEGERCRM_JWT_SECRET must be set to a random string of at least 32 characters.');
+    process.exit(1);
+  }
+  if (IS_PRODUCTION && !/^https:\/\//.test(process.env.LEGERCRM_PUBLIC_APP_URL || '')) {
+    console.warn('[boot] LEGERCRM_PUBLIC_APP_URL is not an https URL; invoice links and password-reset emails will not work.');
+  }
+
   Promise.all([
     prisma.company.upsert({ where: { slug: 'brand-it' }, create: { slug: 'brand-it', name: 'Brand It Company' }, update: { name: 'Brand It Company', isActive: true } }),
     prisma.company.upsert({ where: { slug: 'stoic' }, create: { slug: 'stoic', name: 'Stoic Company' }, update: { name: 'Stoic Company', isActive: true } }),
